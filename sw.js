@@ -1,10 +1,12 @@
 /* Filament Inventory service worker — simple cache for iPadOS 15 Safari */
-var CACHE = 'filament-inventory-v1';
+var CACHE = 'filament-inventory-v2';
 var ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './sw.js',
+  './icons/icon.svg',
+  './icons/apple-touch-icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
@@ -14,7 +16,10 @@ var ASSETS = [
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE).then(function (cache) {
-      return cache.addAll(ASSETS);
+      /* Add one-by-one so a missing optional icon does not fail the whole cache. */
+      return Promise.all(ASSETS.map(function (url) {
+        return cache.add(url).catch(function () { return undefined; });
+      }));
     }).then(function () {
       return self.skipWaiting();
     })
