@@ -1,0 +1,59 @@
+/* Filament Inventory service worker — simple cache for iPadOS 15 Safari */
+var CACHE = 'filament-inventory-v1';
+var ASSETS = [
+  './',
+  './index.html',
+  './manifest.json',
+  './sw.js',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/apple-touch-icon.png',
+  './icons/favicon.png'
+];
+
+self.addEventListener('install', function (event) {
+  event.waitUntil(
+    caches.open(CACHE).then(function (cache) {
+      return cache.addAll(ASSETS);
+    }).then(function () {
+      return self.skipWaiting();
+    })
+  );
+});
+
+self.addEventListener('activate', function (event) {
+  event.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.map(function (key) {
+        if (key !== CACHE) {
+          return caches.delete(key);
+        }
+        return undefined;
+      }));
+    }).then(function () {
+      return self.clients.claim();
+    })
+  );
+});
+
+self.addEventListener('fetch', function (event) {
+  var request = event.request;
+  if (request.method !== 'GET') {
+    return;
+  }
+  event.respondWith(
+    caches.match(request).then(function (cached) {
+      if (cached) {
+        return cached;
+      }
+      return fetch(request).then(function (response) {
+        return response;
+      }).catch(function () {
+        if (request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+        return cached;
+      });
+    })
+  );
+});

@@ -1,0 +1,2577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Filaments">
+  <meta name="theme-color" content="#0d6e6e">
+  <meta name="description" content="Inventory 3D printer filaments by material, color, and amount on hand. Works offline on iPad.">
+  <title>Filament Inventory</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <style>
+
+    /* Filament Inventory — Safari 15 / iPadOS 15.8 compatible.
+       No :has(), container queries, nesting, dvh/svh, color-mix(), oklch. */
+    :root {
+      --bg: #f3efe8;
+      --bg-elev: #fffdf9;
+      --bg-sunken: #e8e2d8;
+      --text: #1c1917;
+      --text-muted: #5c564e;
+      --line: #d5cfc4;
+      --accent: #0d6e6e;
+      --accent-text: #ffffff;
+      --accent-soft: #d5eceb;
+      --danger: #b42318;
+      --danger-soft: #f8d7d3;
+      --warn: #b54708;
+      --warn-soft: #fbe6c8;
+      --ok: #067647;
+      --swatch-border: rgba(0,0,0,0.18);
+      --shadow: 0 1px 3px rgba(28,25,23,0.08), 0 6px 16px rgba(28,25,23,0.06);
+      --radius: 14px;
+      --tap: 48px;
+      --header-h: 56px;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
+      --safe-r: env(safe-area-inset-right, 0px);
+    }
+    html.theme-dark {
+      --bg: #1a1816;
+      --bg-elev: #2a2623;
+      --bg-sunken: #12110f;
+      --text: #f3eee7;
+      --text-muted: #b0a79c;
+      --line: #3d3833;
+      --accent: #3daba8;
+      --accent-text: #0c1f1f;
+      --accent-soft: #1d3c3b;
+      --danger: #f97066;
+      --danger-soft: #3f1a16;
+      --warn: #f7b267;
+      --warn-soft: #3d2a14;
+      --ok: #75e0a7;
+      --swatch-border: rgba(255,255,255,0.28);
+      --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.28);
+    }
+    @media (prefers-color-scheme: dark) {
+      html:not(.theme-light) {
+        --bg: #1a1816;
+        --bg-elev: #2a2623;
+        --bg-sunken: #12110f;
+        --text: #f3eee7;
+        --text-muted: #b0a79c;
+        --line: #3d3833;
+        --accent: #3daba8;
+        --accent-text: #0c1f1f;
+        --accent-soft: #1d3c3b;
+        --danger: #f97066;
+        --danger-soft: #3f1a16;
+        --warn: #f7b267;
+        --warn-soft: #3d2a14;
+        --ok: #75e0a7;
+        --swatch-border: rgba(255,255,255,0.28);
+        --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.28);
+      }
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 17px;
+      line-height: 1.4;
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: rgba(13,110,110,0.18);
+    }
+    * { box-sizing: border-box; }
+    button, input, select, textarea {
+      font-family: inherit;
+      font-size: 16px;
+      color: inherit;
+    }
+    button {
+      -webkit-appearance: none;
+      appearance: none;
+      border: 0;
+      background: none;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    img { border: 0; max-width: 100%; }
+    #app {
+      height: 100%;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-direction: column;
+      flex-direction: column;
+      overflow: hidden;
+      padding-top: var(--safe-t);
+      padding-left: var(--safe-l);
+      padding-right: var(--safe-r);
+    }
+    .topbar {
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+      background: var(--bg-elev);
+      border-bottom: 1px solid var(--line);
+      padding: 8px 16px 10px;
+    }
+    .topbar-row {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-justify-content: space-between;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .brand {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .brand img {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .top-actions {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      gap: 8px;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      -webkit-justify-content: flex-end;
+      justify-content: flex-end;
+    }
+    .btn {
+      display: -webkit-inline-flex;
+      display: inline-flex;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-justify-content: center;
+      justify-content: center;
+      min-height: var(--tap);
+      padding: 0 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      background: var(--bg-sunken);
+      color: var(--text);
+      border: 1px solid var(--line);
+      white-space: nowrap;
+      gap: 6px;
+    }
+    .btn:active, .btn.is-on {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .btn:focus {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: transparent;
+    }
+    .btn-primary:active { background: var(--accent); opacity: 0.88; }
+    .btn-danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: transparent;
+    }
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--accent);
+    }
+    .btn-lg {
+      min-height: 56px;
+      padding: 0 22px;
+      font-size: 18px;
+      border-radius: 14px;
+    }
+    .btn-icon { width: var(--tap); padding: 0; -webkit-flex-shrink: 0; flex-shrink: 0; }
+    .search-row { margin-top: 10px; display: -webkit-flex; display: flex; gap: 8px; }
+    .search-wrap { -webkit-flex: 1; flex: 1; position: relative; }
+    .search-wrap input {
+      width: 100%;
+      height: var(--tap);
+      padding: 0 14px 0 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-sunken);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .search-wrap input:focus {
+      outline: 3px solid var(--accent);
+      outline-offset: 0;
+      background: var(--bg-elev);
+    }
+    .search-wrap .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 0;
+      height: var(--tap);
+      line-height: var(--tap);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .filters {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      -webkit-align-items: center;
+      align-items: center;
+    }
+    .chip {
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text);
+    }
+    .chip.is-on {
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: var(--accent);
+    }
+    .chip-warn.is-on {
+      background: var(--warn);
+      color: #1c1917;
+      border-color: var(--warn);
+    }
+    .view-sort {
+      margin-left: auto;
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+    }
+    select.sel {
+      height: 40px;
+      padding: 0 32px 0 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background-color: var(--bg-elev);
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%235c564e' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    select.sel:focus { outline: 3px solid var(--accent); }
+    #main {
+      -webkit-flex: 1;
+      flex: 1;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 16px;
+      padding-bottom: calc(24px + var(--safe-b));
+    }
+    .group-h {
+      position: -webkit-sticky;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--bg);
+      padding: 10px 4px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .card {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      margin-bottom: 12px;
+      display: -webkit-flex;
+      display: flex;
+      gap: 14px;
+      -webkit-align-items: stretch;
+      align-items: stretch;
+    }
+    .card.is-low {
+      border-color: var(--warn);
+      box-shadow: 0 0 0 2px var(--warn-soft);
+    }
+    .swatch {
+      width: 88px;
+      min-height: 88px;
+      border-radius: 12px;
+      border: 1px solid var(--swatch-border);
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+      position: relative;
+      background-image: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%),
+                        linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%);
+      background-size: 12px 12px;
+      background-position: 0 0, 6px 6px;
+    }
+    .swatch .fill {
+      position: absolute;
+      left: 0; top: 0; right: 0; bottom: 0;
+      border-radius: inherit;
+    }
+    .swatch.unknown .fill { display: none; }
+    .swatch .q-mark {
+      display: none;
+      position: absolute;
+      left: 0; right: 0; top: 50%;
+      margin-top: -0.5em;
+      text-align: center;
+      color: #5c564e;
+      font-weight: 700;
+    }
+    .swatch.unknown .q-mark { display: block; }
+    .card-body {
+      -webkit-flex: 1;
+      flex: 1;
+      min-width: 0;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-direction: column;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: baseline;
+      align-items: baseline;
+      gap: 8px;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+    }
+    .hex-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .meta { color: var(--text-muted); font-size: 15px; }
+    .meta strong { color: var(--text); font-weight: 650; }
+    .notes-preview {
+      font-size: 13px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-actions {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .stepper {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      background: var(--bg-sunken);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .stepper .step-btn {
+      width: 48px;
+      height: 48px;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .stepper .step-btn:active { background: var(--accent-soft); }
+    .stepper .step-val {
+      min-width: 86px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 1.2;
+      padding: 0 4px;
+    }
+    .stepper .step-val span {
+      display: block;
+      font-weight: 600;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .badge-low { background: var(--warn-soft); color: var(--warn); }
+    .badge-seed { background: var(--bg-sunken); color: var(--text-muted); }
+    .qty-unknown { font-style: italic; color: var(--text-muted); }
+    .grid {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .grid-card {
+      width: calc(25% - 9px);
+      min-width: 150px;
+      -webkit-flex: 1 1 160px;
+      flex: 1 1 160px;
+      max-width: 240px;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      text-align: left;
+      padding: 0;
+      display: block;
+      color: inherit;
+    }
+    .grid-card.is-low { border-color: var(--warn); }
+    .grid-card .swatch {
+      width: 100%;
+      height: 110px;
+      min-height: 110px;
+      border-radius: 0;
+      border: 0;
+      border-bottom: 1px solid var(--swatch-border);
+    }
+    .grid-card .g-body { padding: 10px 12px 14px; }
+    .grid-card h3 { margin: 0 0 2px; font-size: 17px; font-weight: 700; }
+    .grid-card .g-mat { font-size: 13px; color: var(--text-muted); }
+    .grid-card .g-qty { margin-top: 6px; font-weight: 700; font-size: 15px; }
+    .empty { text-align: center; padding: 48px 16px; color: var(--text-muted); }
+    .empty h2 { color: var(--text); margin: 0 0 8px; }
+
+    .panel-root {
+      display: none;
+      position: fixed;
+      left: 0; right: 0; top: 0; bottom: 0;
+      z-index: 40;
+      background: rgba(20,16,12,0.45);
+      padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+    }
+    .panel-root.is-open { display: -webkit-flex; display: flex; }
+    .panel {
+      background: var(--bg);
+      width: 100%;
+      max-width: 720px;
+      margin: 12px auto;
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-direction: column;
+      flex-direction: column;
+      max-height: 96%;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .panel.wide { max-width: 900px; }
+    .panel-head {
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-justify-content: space-between;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-elev);
+      gap: 8px;
+    }
+    .panel-head h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      -webkit-flex: 1;
+      flex: 1;
+    }
+    .panel-body {
+      -webkit-flex: 1;
+      flex: 1;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px;
+    }
+    .panel-foot {
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+      padding: 12px 16px;
+      padding-bottom: calc(12px + var(--safe-b));
+      border-top: 1px solid var(--line);
+      background: var(--bg-elev);
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      -webkit-justify-content: flex-end;
+      justify-content: flex-end;
+    }
+    .form-grid {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 14px 16px;
+    }
+    .field { -webkit-flex: 1 1 200px; flex: 1 1 200px; min-width: 0; }
+    .field.full { -webkit-flex: 1 1 100%; flex: 1 1 100%; }
+    .field.narrow { -webkit-flex: 0 1 150px; flex: 0 1 150px; }
+    .field label, .field .lbl {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .field input[type="text"],
+    .field input[type="number"],
+    .field input[type="date"],
+    .field input[type="search"],
+    .field textarea,
+    .field select {
+      width: 100%;
+      min-height: var(--tap);
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-elev);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .field textarea { min-height: 88px; resize: vertical; }
+    .field input:focus, .field textarea:focus, .field select:focus {
+      outline: 3px solid var(--accent);
+      outline-offset: 0;
+    }
+    .color-row {
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+    }
+    .color-row input[type="color"] {
+      width: 56px;
+      height: var(--tap);
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-elev);
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+    }
+    .color-row input[type="text"] { -webkit-flex: 1; flex: 1; min-width: 0; }
+    .checks {
+      display: -webkit-flex;
+      display: flex;
+      gap: 16px;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      padding-top: 8px;
+    }
+    .checks label {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 16px;
+      color: var(--text);
+    }
+    .checks input[type="checkbox"] { width: 22px; height: 22px; }
+    .cam-stage {
+      position: relative;
+      background: #111;
+      border-radius: 12px;
+      overflow: hidden;
+      min-height: 240px;
+      touch-action: none;
+    }
+    .cam-stage canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 62vh;
+    }
+    .reticle {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      margin-left: -22px;
+      margin-top: -22px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .reticle::before, .reticle::after {
+      content: "";
+      position: absolute;
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.55);
+    }
+    .reticle::before { left: 21px; top: 6px; width: 2px; height: 32px; }
+    .reticle::after { top: 21px; left: 6px; height: 2px; width: 32px; }
+    .reticle .ring {
+      position: absolute;
+      left: 4px; top: 4px; right: 4px; bottom: 4px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.55);
+    }
+    .cam-tools {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+      margin-top: 12px;
+    }
+    .sample-preview {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .sample-preview .big-swatch {
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      border: 1px solid var(--swatch-border);
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+    }
+    .hint { font-size: 14px; color: var(--text-muted); margin: 0 0 10px; }
+    .wb-on { color: var(--ok); font-weight: 700; }
+    .sticky-bar {
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .weight-btns {
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .weight-btns .btn { min-width: 72px; }
+    .session-list { margin-top: 16px; }
+    .session-item {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .session-item .mini {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--swatch-border);
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+    }
+    .toast {
+      display: none;
+      position: fixed;
+      left: 50%;
+      bottom: calc(24px + var(--safe-b));
+      -webkit-transform: translateX(-50%);
+      transform: translateX(-50%);
+      background: #1c1917;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 12px;
+      z-index: 80;
+      max-width: 90%;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+    html.theme-dark .toast { background: #f3eee7; color: #1c1917; }
+    .toast.is-on { display: block; }
+    .csv-box {
+      width: 100%;
+      min-height: 180px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .help-block {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }
+    .help-block h3 { margin: 0 0 6px; font-size: 16px; }
+    .help-block code, .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+    }
+    @media (max-width: 700px) {
+      .brand h1 { font-size: 17px; }
+      .swatch { width: 72px; min-height: 72px; }
+      .grid-card { max-width: none; -webkit-flex-basis: calc(50% - 8px); flex-basis: calc(50% - 8px); }
+      .top-actions .btn { min-height: 44px; padding: 0 10px; }
+    }
+    @media (min-width: 1000px) {
+      .grid-card { -webkit-flex-basis: 180px; flex-basis: 180px; }
+    }
+
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="topbar-row">
+        <div class="brand">
+          <img src="icons/apple-touch-icon.png" alt="">
+          <h1>Filament Inventory</h1>
+        </div>
+        <div class="top-actions">
+          <button type="button" class="btn" id="btn-settings" title="Settings">Settings</button>
+          <button type="button" class="btn" id="btn-csv">CSV</button>
+          <button type="button" class="btn" id="btn-rapid">Add spools</button>
+          <button type="button" class="btn btn-primary" id="btn-add">+ Add</button>
+        </div>
+      </div>
+      <div class="search-row">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">&#8981;</span>
+          <input type="search" id="search" placeholder="Search color, brand, notes, location&#8230;" autocomplete="off" enterkeyhint="search">
+        </div>
+      </div>
+      <div class="filters" id="filters"></div>
+    </header>
+    <main id="main"></main>
+  </div>
+
+  <div class="panel-root" id="panel-edit" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <div class="panel">
+      <div class="panel-head">
+        <button type="button" class="btn btn-ghost" data-close="panel-edit">Cancel</button>
+        <h2 id="edit-title">Filament</h2>
+        <button type="button" class="btn btn-primary" id="btn-save-edit">Save</button>
+      </div>
+      <div class="panel-body" id="edit-body"></div>
+      <div class="panel-foot">
+        <button type="button" class="btn btn-danger" id="btn-delete-edit">Delete</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn" data-close="panel-edit">Cancel</button>
+        <button type="button" class="btn btn-primary btn-lg" id="btn-save-edit-2">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-root" id="panel-rapid" role="dialog" aria-modal="true" aria-labelledby="rapid-title">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button type="button" class="btn btn-ghost" data-close="panel-rapid">Done</button>
+        <h2 id="rapid-title">Add spools</h2>
+        <span></span>
+      </div>
+      <div class="panel-body" id="rapid-body"></div>
+    </div>
+  </div>
+
+  <div class="panel-root" id="panel-camera" role="dialog" aria-modal="true" aria-labelledby="cam-title">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button type="button" class="btn btn-ghost" id="btn-cam-cancel">Cancel</button>
+        <h2 id="cam-title">Sample color</h2>
+        <button type="button" class="btn btn-primary" id="btn-cam-use">Use color</button>
+      </div>
+      <div class="panel-body" id="camera-body"></div>
+    </div>
+  </div>
+
+  <div class="panel-root" id="panel-csv" role="dialog" aria-modal="true" aria-labelledby="csv-title">
+    <div class="panel">
+      <div class="panel-head">
+        <button type="button" class="btn btn-ghost" data-close="panel-csv">Close</button>
+        <h2 id="csv-title">CSV backup</h2>
+        <span></span>
+      </div>
+      <div class="panel-body" id="csv-body"></div>
+    </div>
+  </div>
+
+  <div class="panel-root" id="panel-settings" role="dialog" aria-modal="true" aria-labelledby="set-title">
+    <div class="panel">
+      <div class="panel-head">
+        <button type="button" class="btn btn-ghost" data-close="panel-settings">Close</button>
+        <h2 id="set-title">Settings</h2>
+        <span></span>
+      </div>
+      <div class="panel-body" id="settings-body"></div>
+    </div>
+  </div>
+
+  <div class="panel-root" id="panel-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="panel" style="max-width:420px;margin:auto">
+      <div class="panel-head">
+        <span></span>
+        <h2 id="confirm-title">Confirm</h2>
+        <span></span>
+      </div>
+      <div class="panel-body"><p id="confirm-msg"></p></div>
+      <div class="panel-foot">
+        <button type="button" class="btn" id="btn-confirm-no">Cancel</button>
+        <button type="button" class="btn btn-danger btn-lg" id="btn-confirm-yes">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <input type="file" id="file-camera" accept="image/*" capture="environment" class="sr-only" aria-hidden="true">
+  <input type="file" id="file-import" accept=".csv,text/csv,text/plain" class="sr-only" aria-hidden="true">
+
+  <script>
+/* Filament Inventory app — ES2019, Safari 15 / iPadOS 15.8. */
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'filament-inventory-v1';
+  var SETTINGS_KEY = 'filament-inventory-settings-v1';
+  var SEED_NOTE = 'from print history, please count';
+  var PATCH = 15;
+  var PHOTO_MAX = 1200;
+
+  var CSV_HEADERS = [
+    'id', 'material', 'brand', 'product_line', 'color_name', 'color_hex',
+    'finish', 'diameter_mm', 'spools_sealed', 'spools_opened', 'grams_remaining',
+    'spool_capacity_g', 'location', 'date_opened', 'date_dried', 'notes',
+    'presets_k1c', 'presets_k2', 'low_stock_threshold', 'seeded'
+  ];
+
+  var MATERIALS = ['PLA', 'PLA+', 'PLA-Silk', 'PETG', 'TPU', 'ABS', 'ASA', 'PET-CF', 'Other'];
+  var FINISHES = ['basic', 'matte', 'silk'];
+  var WEIGHT_QUICK = [250, 500, 750, 1000];
+
+  var COLOR_NAMES = [
+    {name: 'White', hex: '#FFFFFF'},
+    {name: 'Ivory', hex: '#FFFFF0'},
+    {name: 'Cream', hex: '#FFFDD0'},
+    {name: 'Natural', hex: '#F5E6C8'},
+    {name: 'Beige', hex: '#F5F5DC'},
+    {name: 'Skin', hex: '#F8E2D6'},
+    {name: 'Peach', hex: '#FFCBA4'},
+    {name: 'Tan', hex: '#D2B48C'},
+    {name: 'Wood', hex: '#C8A27A'},
+    {name: 'Sand', hex: '#C2B280'},
+    {name: 'Khaki', hex: '#C3B091'},
+    {name: 'Brown', hex: '#5C3A21'},
+    {name: 'Chocolate', hex: '#BA552A'},
+    {name: 'Copper', hex: '#B87333'},
+    {name: 'Bronze', hex: '#CD7F32'},
+    {name: 'Gold', hex: '#D4AF37'},
+    {name: 'Yellow', hex: '#FFEE00'},
+    {name: 'Orange', hex: '#FF7F00'},
+    {name: 'Coral', hex: '#F2754E'},
+    {name: 'Salmon', hex: '#FA8072'},
+    {name: 'Red', hex: '#FF1A1A'},
+    {name: 'Crimson', hex: '#DC143C'},
+    {name: 'Maroon', hex: '#800000'},
+    {name: 'Burgundy', hex: '#800020'},
+    {name: 'Pink', hex: '#FF80C0'},
+    {name: 'Rose', hex: '#FC9DA9'},
+    {name: 'Magenta', hex: '#F930F3'},
+    {name: 'Purple', hex: '#8000FF'},
+    {name: 'Lavender', hex: '#B39DDB'},
+    {name: 'Blue', hex: '#1E4DFF'},
+    {name: 'Royal', hex: '#0000FF'},
+    {name: 'Navy', hex: '#000080'},
+    {name: 'Sky', hex: '#87CEEB'},
+    {name: 'Cyan', hex: '#00E5E5'},
+    {name: 'Teal', hex: '#00C1AE'},
+    {name: 'Turquoise', hex: '#40E0D0'},
+    {name: 'Mint', hex: '#98FF98'},
+    {name: 'Green', hex: '#56DF3D'},
+    {name: 'Lime', hex: '#32CD32'},
+    {name: 'Forest', hex: '#228B22'},
+    {name: 'Olive', hex: '#808000'},
+    {name: 'Silver', hex: '#C0C0C0'},
+    {name: 'Gray', hex: '#808080'},
+    {name: 'Charcoal', hex: '#3A3A3A'},
+    {name: 'Black', hex: '#000000'},
+    {name: 'Clear', hex: '#EEF3F6'}
+  ];
+
+  function seedNote(extra) {
+    return extra ? SEED_NOTE + '. ' + extra : SEED_NOTE;
+  }
+
+  /* Seeded from print-queue (printer-state, queue.json, CFS slot maps,
+     cfs-1A-change-20261106.json, bom_draft_v2.json) and Print_Log_K1C_K2.csv.
+     Quantities are blank (unknown), never zero. Colors/brands only from records. */
+  function seedList() {
+    function S(o) {
+      return Object.assign({
+        material: 'PLA',
+        brand: 'Generic',
+        product_line: '',
+        color_name: '',
+        color_hex: '',
+        finish: 'basic',
+        diameter_mm: '1.75',
+        spools_sealed: '',
+        spools_opened: '',
+        grams_remaining: '',
+        spool_capacity_g: '1000',
+        location: '',
+        date_opened: '',
+        date_dried: '',
+        notes: SEED_NOTE,
+        presets_k1c: '',
+        presets_k2: '',
+        low_stock_threshold: '',
+        seeded: 'yes'
+      }, o);
+    }
+    return [
+      S({
+        id: 'seed-pla-generic-white',
+        product_line: 'Generic PLA',
+        color_name: 'White', color_hex: '#FFFFFF',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('Loaded in K2 CFS 1A (after 6 Nov 2026 color edit) and used on K1C and K2 (moon globe, tree, clips, lamps). K1C does not report remaining filament.')
+      }),
+      S({
+        id: 'seed-pla-crpla-white',
+        brand: 'Creality', product_line: 'CR-PLA',
+        color_name: 'White', color_hex: '#FFFFFF',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('CR-PLA @K1C (53C bed) used for wave-lamp barrel, hourglass, moon globe, facemask, and other K1C jobs.')
+      }),
+      S({
+        id: 'seed-pla-hyper-green',
+        brand: 'Creality', product_line: 'Hyper PLA',
+        color_name: 'Green', color_hex: '#3DDF57',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('Creality Hyper PLA in K2 CFS records (RFID 01001, firmware color #03ddf57 = #3DDF57). Many jobs used a Hyper PLA preset; those job colors were not always recorded.')
+      }),
+      S({
+        id: 'seed-pla-generic-black',
+        product_line: 'Generic PLA',
+        color_name: 'Black', color_hex: '#000000',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('K2 CFS 1B. Used for tea-lamp stand J-0064 and puzzle-board black. Jobs J-0078/J-0079 recorded #110403 on 1B — may be the same spool.')
+      }),
+      S({
+        id: 'seed-pla-generic-tan',
+        product_line: 'Generic PLA',
+        color_name: 'Wood', color_hex: '#C8A27A',
+        presets_k2: 'yes',
+        notes: seedNote('Puzzle-board tan (T1 / CFS 1A in those jobs). A CFS snapshot on 6 Nov also showed Generic PLA #D2B48C (tan) in 1A before it was changed to white.')
+      }),
+      S({
+        id: 'seed-pla-generic-brown',
+        product_line: 'Generic PLA',
+        color_name: 'Chocolate', color_hex: '#BA552A',
+        presets_k2: 'yes',
+        notes: seedNote('K2 CFS 1D loaded color #BA552A (reddish-brown), accepted for puzzle-board slice color #5C3A21.')
+      }),
+      S({
+        id: 'seed-pla-generic-coral',
+        product_line: 'Generic PLA',
+        color_name: 'Coral', color_hex: '#F2754E',
+        notes: seedNote('Recorded as PLA #F2754E on a queued/deleted job.')
+      }),
+      S({
+        id: 'seed-pla-generic-blue-6c84ff',
+        product_line: 'Generic PLA',
+        color_name: 'Blue', color_hex: '#6C84FF',
+        presets_k2: 'yes',
+        notes: seedNote('User-specified PLA color #6c84ff on CFS 2C.')
+      }),
+      S({
+        id: 'seed-pla-generic-royal',
+        product_line: 'Generic PLA',
+        color_name: 'Royal', color_hex: '#0000FF',
+        notes: seedNote('G-code color on printed chess-marker jobs.')
+      }),
+      S({
+        id: 'seed-pla-generic-red',
+        product_line: 'Generic PLA',
+        color_name: 'Red', color_hex: '#FF1E1E',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('K2 CFS 2D #FF1E1E. Related reds in records: #FF0F05 (snowman J-0083), #ED1C24 (slicer project), #FF0000 (Santa). Please confirm if these are the same spool.')
+      }),
+      S({
+        id: 'seed-pla-generic-skin',
+        product_line: 'Generic PLA',
+        color_name: 'Skin', color_hex: '#F8E2D6',
+        presets_k2: 'yes',
+        notes: seedNote('J-0074 slice color #F8E2D6 (mapped to CFS 1A white as closest). Santa jobs also used #EFD1AF.')
+      }),
+      S({
+        id: 'seed-pla-generic-beige',
+        product_line: 'Generic PLA',
+        color_name: 'Beige', color_hex: '#EFD1AF',
+        presets_k2: 'yes',
+        notes: seedNote('Santa-body g-code color #EFD1AF.')
+      }),
+      S({
+        id: 'seed-pla-generic-pink',
+        product_line: 'Generic PLA',
+        color_name: 'Pink', color_hex: '#FF80C0',
+        presets_k2: 'yes',
+        notes: seedNote('Santa-body J-0058, CFS 2C, Generic PLA @K2 Pro (53C bed).')
+      }),
+      S({
+        id: 'seed-pla-generic-rose',
+        product_line: 'Generic PLA',
+        color_name: 'Rose', color_hex: '#FC9DA9',
+        presets_k2: 'yes',
+        notes: seedNote('K2 CFS 2C snapshot 6 Nov 2026, Generic PLA #FC9DA9.')
+      }),
+      S({
+        id: 'seed-pla-generic-purple-cfs',
+        product_line: 'Generic PLA',
+        color_name: 'Magenta', color_hex: '#CE58F8',
+        presets_k2: 'yes',
+        notes: seedNote('K2 CFS 2B snapshot 6 Nov 2026, Generic PLA #CE58F8.')
+      }),
+      S({
+        id: 'seed-pla-generic-purple',
+        product_line: 'Generic PLA',
+        color_name: 'Purple', color_hex: '#8000FF',
+        notes: seedNote('G-code color on printed gnome, viking-horn, and LED-cap jobs.')
+      }),
+      S({
+        id: 'seed-pla-generic-yellow',
+        product_line: 'Generic PLA',
+        color_name: 'Yellow', color_hex: '#FFFF00',
+        notes: seedNote('G-code color on printed gnome, Santa-hat, and chess jobs.')
+      }),
+      S({
+        id: 'seed-pla-generic-green',
+        product_line: 'Generic PLA',
+        color_name: 'Green', color_hex: '#56DF3D',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('G-code color on many printed jobs (gnome pins and noses, pumpkin stems, and others).')
+      }),
+      S({
+        id: 'seed-pla-generic-teal',
+        product_line: 'Generic PLA',
+        color_name: 'Teal', color_hex: '#00C1AE',
+        notes: seedNote('G-code color on origami tea-lamp jobs.')
+      }),
+      S({
+        id: 'seed-pla-generic-gray',
+        product_line: 'Generic PLA',
+        color_name: 'Gray', color_hex: '#C7C9C7',
+        notes: seedNote('G-code color on tea-lamp stack-base job.')
+      }),
+      S({
+        id: 'seed-pla-silk',
+        material: 'PLA-Silk',
+        product_line: 'Generic PLA-Silk',
+        finish: 'silk',
+        presets_k1c: 'yes',
+        notes: seedNote('Preset Generic PLA-Silk @Creality K1C 0.6 nozzle used on two jobs; color was not recorded.')
+      }),
+      S({
+        id: 'seed-pla-prusament',
+        brand: 'Prusa Polymers', product_line: 'Prusament PLA',
+        notes: seedNote('Prusament PLA preset used on two jobs; color was not recorded.')
+      }),
+      S({
+        id: 'seed-petg-generic-gold',
+        material: 'PETG', product_line: 'Generic PETG',
+        color_name: 'Gold', color_hex: '#D4AF37',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('K2 CFS 1C. Used on puzzle-board gold and v20 rail/clip jobs. Recommended for bag clips.')
+      }),
+      S({
+        id: 'seed-petg-generic-white',
+        material: 'PETG', product_line: 'Generic PETG',
+        color_name: 'White', color_hex: '#FFFFFF',
+        presets_k1c: 'yes', presets_k2: 'yes',
+        notes: seedNote('K2 CFS 2A. Used on K1C PETG jobs (e.g. J-0071, J-0073).')
+      }),
+      S({
+        id: 'seed-petg-generic-coral',
+        material: 'PETG', brand: 'Creality', product_line: 'CR-PETG',
+        color_name: 'Coral', color_hex: '#F2754E',
+        presets_k2: 'yes',
+        notes: seedNote('J-0050 used CR-PETG @K2 Pro (53C bed) with color #F2754E (CFS 2A).')
+      }),
+      S({
+        id: 'seed-petg-generic-teal',
+        material: 'PETG', product_line: 'Generic PETG',
+        color_name: 'Teal', color_hex: '#00C1AE',
+        presets_k1c: 'yes',
+        notes: seedNote('Origami tea-lamp shade g-code (PETG, #00C1AE). Teal PETG has also been used on the K1C.')
+      }),
+      S({
+        id: 'seed-petg-clear',
+        material: 'PETG', product_line: 'Generic PETG',
+        color_name: 'Clear', color_hex: '',
+        presets_k2: 'yes',
+        notes: seedNote('Preset Generic PETG Clear PETG used on several jobs; no hex recorded.')
+      }),
+      S({
+        id: 'seed-petg-hyper',
+        material: 'PETG', brand: 'Creality', product_line: 'Hyper PETG',
+        presets_k2: 'yes',
+        notes: seedNote('Hyper PETG @Creality K2 Pro preset used on several jobs; color was not recorded.')
+      }),
+      S({
+        id: 'seed-tpu-generic-white',
+        material: 'TPU', product_line: 'Generic TPU',
+        color_name: 'White', color_hex: '#FFFFFF',
+        presets_k1c: 'yes',
+        notes: seedNote('J-0055, Generic TPU @K1C (53C bed), #FFFFFF.')
+      }),
+      S({
+        id: 'seed-tpu-generic-teal',
+        material: 'TPU', product_line: 'Generic TPU',
+        color_name: 'Teal', color_hex: '#00C1AE',
+        notes: seedNote('Slicer project for J-0084 defined Generic TPU #00C1AE (0 g used on that job).')
+      }),
+      S({
+        id: 'seed-tpu-generic-green',
+        material: 'TPU', product_line: 'Generic TPU',
+        color_name: 'Green', color_hex: '#56DF3D',
+        notes: seedNote('G-code color on printed Sunlu reel-adaptor TPU jobs.')
+      }),
+      S({
+        id: 'seed-petcf',
+        material: 'PET-CF', product_line: 'Generic PET-CF',
+        presets_k2: 'yes',
+        notes: seedNote('One PET-CF job is in the print log (Generic PETG @ K2 Bed @ 70c preset); color was not recorded.')
+      })
+    ];
+  }
+
+  function uid() {
+    return 'f-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
+  function trim(s) { return String(s == null ? '' : s).replace(/^\s+|\s+$/g, ''); }
+  function hasOwn(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+
+  function normalizeHex(h) {
+    if (!h) return '';
+    var s = trim(String(h)).toUpperCase();
+    if (s.charAt(0) !== '#') s = '#' + s;
+    if (/^#[0-9A-F]{3}$/.test(s)) {
+      return ('#' + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2) + s.charAt(3) + s.charAt(3));
+    }
+    if (/^#[0-9A-F]{6}$/.test(s)) return s;
+    if (/^#[0-9A-F]{8}$/.test(s)) return s.substring(0, 7);
+    return '';
+  }
+  function hexToRgb(hex) {
+    var h = normalizeHex(hex);
+    if (!h) return null;
+    return {
+      r: parseInt(h.substring(1, 3), 16),
+      g: parseInt(h.substring(3, 5), 16),
+      b: parseInt(h.substring(5, 7), 16)
+    };
+  }
+  function rgbToHex(r, g, b) {
+    function to2(n) {
+      var s = Math.max(0, Math.min(255, Math.round(n))).toString(16).toUpperCase();
+      return s.length < 2 ? '0' + s : s;
+    }
+    return '#' + to2(r) + to2(g) + to2(b);
+  }
+  function nearestColorName(hex) {
+    var rgb = hexToRgb(hex);
+    if (!rgb) return '';
+    var best = COLOR_NAMES[0];
+    var bestD = Infinity;
+    var i;
+    for (i = 0; i < COLOR_NAMES.length; i++) {
+      var c = hexToRgb(COLOR_NAMES[i].hex);
+      var dr = rgb.r - c.r, dg = rgb.g - c.g, db = rgb.b - c.b;
+      var d = dr * dr + dg * dg + db * db;
+      if (d < bestD) { bestD = d; best = COLOR_NAMES[i]; }
+    }
+    return best.name;
+  }
+  function isYes(v) {
+    var s = trim(v).toLowerCase();
+    return s === 'yes' || s === 'true' || s === '1' || s === 'y';
+  }
+  function parseNum(v) {
+    if (v === '' || v == null) return null;
+    var n = Number(v);
+    if (isNaN(n)) return null;
+    return n;
+  }
+  function totalSpools(item) {
+    var a = parseNum(item.spools_sealed);
+    var b = parseNum(item.spools_opened);
+    if (a == null && b == null) return null;
+    return (a || 0) + (b || 0);
+  }
+  function onHandSortValue(item) {
+    var t = totalSpools(item);
+    if (t == null) return -1;
+    var g = parseNum(item.grams_remaining);
+    return t * 100000 + (g == null ? 0 : g);
+  }
+  function isLow(item, defaultThreshold) {
+    var t = totalSpools(item);
+    if (t == null) return false;
+    var thr = parseNum(item.low_stock_threshold);
+    if (thr == null) thr = defaultThreshold;
+    if (thr == null) thr = 1;
+    return t <= thr;
+  }
+  function qtyLabel(item) {
+    var t = totalSpools(item);
+    if (t == null) return 'quantity unknown';
+    var parts = [];
+    if (item.spools_sealed !== '' && item.spools_sealed != null) parts.push(item.spools_sealed + ' sealed');
+    if (item.spools_opened !== '' && item.spools_opened != null) parts.push(item.spools_opened + ' opened');
+    var g = parseNum(item.grams_remaining);
+    if (g != null) parts.push(g + ' g left');
+    return parts.join(' \u00b7 ') || (t + ' on hand');
+  }
+
+  var state = {
+    items: [],
+    settings: {
+      theme: 'system',
+      lowStockThreshold: 1,
+      defaultCapacity: 1000,
+      view: 'list',
+      sort: 'material',
+      filter: 'all',
+      search: '',
+      lowOnly: false,
+      unknownOnly: false
+    }
+  };
+
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      var s = JSON.parse(raw);
+      var k;
+      for (k in s) { if (hasOwn(s, k)) state.settings[k] = s[k]; }
+    } catch (e) {}
+  }
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); }
+    catch (e) { toast('Could not save settings (storage full?)'); }
+  }
+  function loadItems() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (data && data.items && data.items.length) {
+          state.items = data.items;
+          return;
+        }
+      }
+    } catch (e) {}
+    state.items = seedList();
+    saveItems();
+  }
+  function saveItems() {
+    try {
+      var payload = JSON.stringify({
+        version: 1,
+        savedAt: new Date().toISOString(),
+        items: state.items
+      });
+      localStorage.setItem(STORAGE_KEY, payload);
+      localStorage.setItem(STORAGE_KEY + '-backup', payload);
+    } catch (e) {
+      toast('Could not save inventory (storage full?). Export a CSV now.');
+    }
+  }
+  function applyTheme() {
+    var t = state.settings.theme;
+    var html = document.documentElement;
+    html.className = html.className.replace(/\btheme-(dark|light)\b/g, '');
+    html.className = trim(html.className);
+    if (t === 'dark') html.className += (html.className ? ' ' : '') + 'theme-dark';
+    if (t === 'light') html.className += (html.className ? ' ' : '') + 'theme-light';
+    var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#1a1816' : '#0d6e6e');
+  }
+
+  function csvEscape(v) {
+    var s = v == null ? '' : String(v);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function toCSV(items) {
+    var lines = [CSV_HEADERS.join(',')];
+    var i, j, row, key;
+    for (i = 0; i < items.length; i++) {
+      row = [];
+      for (j = 0; j < CSV_HEADERS.length; j++) {
+        key = CSV_HEADERS[j];
+        row.push(csvEscape(items[i][key] == null ? '' : items[i][key]));
+      }
+      lines.push(row.join(','));
+    }
+    return lines.join('\r\n') + '\r\n';
+  }
+  function parseCSV(text) {
+    var rows = [], row = [], field = '', i = 0, inQuotes = false;
+    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    while (i < text.length) {
+      var c = text.charAt(i);
+      if (inQuotes) {
+        if (c === '"') {
+          if (text.charAt(i + 1) === '"') { field += '"'; i += 2; continue; }
+          inQuotes = false; i += 1; continue;
+        }
+        field += c; i += 1; continue;
+      }
+      if (c === '"') { inQuotes = true; i += 1; continue; }
+      if (c === ',') { row.push(field); field = ''; i += 1; continue; }
+      if (c === '\n' || c === '\r') {
+        if (c === '\r' && text.charAt(i + 1) === '\n') i += 1;
+        row.push(field); field = '';
+        if (!(row.length === 1 && row[0] === '')) rows.push(row);
+        row = []; i += 1; continue;
+      }
+      field += c; i += 1;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+  function itemsFromCSV(text) {
+    var rows = parseCSV(text);
+    if (!rows.length) return [];
+    var headers = rows[0].map(function (h) { return trim(h); });
+    var out = [], i, j, obj, k;
+    for (i = 1; i < rows.length; i++) {
+      obj = {};
+      for (j = 0; j < CSV_HEADERS.length; j++) obj[CSV_HEADERS[j]] = '';
+      for (j = 0; j < headers.length && j < rows[i].length; j++) {
+        k = headers[j];
+        if (hasOwn(obj, k) || CSV_HEADERS.indexOf(k) !== -1) obj[k] = rows[i][j];
+      }
+      if (!obj.id) obj.id = uid();
+      obj.color_hex = normalizeHex(obj.color_hex) || obj.color_hex;
+      out.push(obj);
+    }
+    return out;
+  }
+  function dateStamp() {
+    var d = new Date();
+    function z(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes());
+  }
+
+  function samplePatch(ctx, cx, cy, size, wbGains) {
+    var half = Math.floor(size / 2);
+    var canvas = ctx.canvas;
+    var x = Math.round(cx) - half;
+    var y = Math.round(cy) - half;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    var w = size, h = size;
+    if (x + w > canvas.width) w = canvas.width - x;
+    if (y + h > canvas.height) h = canvas.height - y;
+    if (w < 1 || h < 1) return null;
+    var data = ctx.getImageData(x, y, w, h).data;
+    var pixels = [], i, r, g, b, lum;
+    for (i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      r = data[i]; g = data[i + 1]; b = data[i + 2];
+      if (wbGains) {
+        r = Math.max(0, Math.min(255, Math.round(r * wbGains.r)));
+        g = Math.max(0, Math.min(255, Math.round(g * wbGains.g)));
+        b = Math.max(0, Math.min(255, Math.round(b * wbGains.b)));
+      }
+      lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      pixels.push({r: r, g: g, b: b, lum: lum});
+    }
+    if (!pixels.length) return null;
+    pixels.sort(function (a, b) { return a.lum - b.lum; });
+    var keep = Math.ceil(pixels.length * 0.9);
+    if (keep < 1) keep = 1;
+    var sr = 0, sg = 0, sb = 0;
+    for (i = 0; i < keep; i++) {
+      sr += pixels[i].r; sg += pixels[i].g; sb += pixels[i].b;
+    }
+    return { r: Math.round(sr / keep), g: Math.round(sg / keep), b: Math.round(sb / keep) };
+  }
+  function gainsFromReference(ref) {
+    var mx = Math.max(ref.r, ref.g, ref.b, 1);
+    return { r: mx / Math.max(1, ref.r), g: mx / Math.max(1, ref.g), b: mx / Math.max(1, ref.b) };
+  }
+  function downscaleImageToCanvas(img, maxPx) {
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    var scale = 1;
+    var maxSide = Math.max(w, h);
+    if (maxSide > maxPx) scale = maxPx / maxSide;
+    var cw = Math.max(1, Math.round(w * scale));
+    var ch = Math.max(1, Math.round(h * scale));
+    var canvas = document.createElement('canvas');
+    canvas.width = cw;
+    canvas.height = ch;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, cw, ch);
+    return {canvas: canvas, ctx: ctx};
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast is-on';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.className = 'toast'; }, 2800);
+  }
+  function materialOptions(selected) {
+    var html = '', i, m, seen = {};
+    for (i = 0; i < MATERIALS.length; i++) {
+      m = MATERIALS[i]; seen[m] = true;
+      html += '<option value="' + esc(m) + '"' + (m === selected ? ' selected' : '') + '>' + esc(m) + '</option>';
+    }
+    for (i = 0; i < state.items.length; i++) {
+      m = state.items[i].material;
+      if (m && !seen[m]) {
+        seen[m] = true;
+        html += '<option value="' + esc(m) + '"' + (m === selected ? ' selected' : '') + '>' + esc(m) + '</option>';
+      }
+    }
+    return html;
+  }
+  function uniqueMaterials() {
+    var set = {}, i, m, out = [];
+    for (i = 0; i < MATERIALS.length; i++) set[MATERIALS[i]] = true;
+    for (i = 0; i < state.items.length; i++) {
+      m = state.items[i].material;
+      if (m) set[m] = true;
+    }
+    for (i = 0; i < MATERIALS.length; i++) out.push(MATERIALS[i]);
+    for (m in set) {
+      if (hasOwn(set, m) && MATERIALS.indexOf(m) === -1) out.push(m);
+    }
+    return out;
+  }
+  function filteredItems() {
+    var s = state.settings;
+    var q = trim(s.search).toLowerCase();
+    var out = [], i, it, blob;
+    for (i = 0; i < state.items.length; i++) {
+      it = state.items[i];
+      if (s.filter && s.filter !== 'all' && it.material !== s.filter) continue;
+      if (s.lowOnly && !isLow(it, s.lowStockThreshold)) continue;
+      if (s.unknownOnly && totalSpools(it) != null) continue;
+      if (q) {
+        blob = [
+          it.material, it.brand, it.product_line, it.color_name, it.color_hex,
+          it.finish, it.location, it.notes, it.presets_k1c, it.presets_k2
+        ].join(' ').toLowerCase();
+        if (blob.indexOf(q) === -1) continue;
+      }
+      out.push(it);
+    }
+    var sort = s.sort;
+    out.sort(function (a, b) {
+      if (sort === 'hand') return onHandSortValue(b) - onHandSortValue(a);
+      if (sort === 'color') return trim(a.color_name || a.color_hex).localeCompare(trim(b.color_name || b.color_hex));
+      if (sort === 'name') return trim(a.color_name || a.product_line || a.material).localeCompare(trim(b.color_name || b.product_line || b.material));
+      var ia = MATERIALS.indexOf(a.material);
+      var ib = MATERIALS.indexOf(b.material);
+      if (ia < 0) ia = 1000;
+      if (ib < 0) ib = 1000;
+      if (ia !== ib) return ia - ib;
+      var ca = trim(a.color_name || a.color_hex || a.product_line);
+      var cb = trim(b.color_name || b.color_hex || b.product_line);
+      /* Colored entries before unknown color */
+      var ua = ca ? 0 : 1;
+      var ub = cb ? 0 : 1;
+      if (ua !== ub) return ua - ub;
+      return ca.localeCompare(cb);
+    });
+    return out;
+  }
+  function swatchHTML(hex, cls) {
+    var h = normalizeHex(hex);
+    var unk = h ? '' : ' unknown';
+    var fill = h ? '<div class="fill" style="background:' + esc(h) + '"></div>' : '';
+    return '<div class="swatch' + unk + (cls ? ' ' + cls : '') + '">' + fill + '<span class="q-mark">?</span></div>';
+  }
+  function renderFilters() {
+    var mats = uniqueMaterials();
+    var s = state.settings;
+    var html = '<button type="button" class="chip' + (s.filter === 'all' ? ' is-on' : '') + '" data-filter="all">All</button>';
+    var i, present = {};
+    for (i = 0; i < state.items.length; i++) present[state.items[i].material] = true;
+    for (i = 0; i < mats.length; i++) {
+      if (!present[mats[i]] && mats[i] !== s.filter) continue;
+      html += '<button type="button" class="chip' + (s.filter === mats[i] ? ' is-on' : '') + '" data-filter="' + esc(mats[i]) + '">' + esc(mats[i]) + '</button>';
+    }
+    html += '<button type="button" class="chip chip-warn' + (s.lowOnly ? ' is-on' : '') + '" data-low="1">Low stock</button>';
+    html += '<button type="button" class="chip' + (s.unknownOnly ? ' is-on' : '') + '" data-unknown="1">Unknown qty</button>';
+    html += '<div class="view-sort">';
+    html += '<button type="button" class="chip' + (s.view === 'list' ? ' is-on' : '') + '" data-view="list">List</button>';
+    html += '<button type="button" class="chip' + (s.view === 'grid' ? ' is-on' : '') + '" data-view="grid">Grid</button>';
+    html += '<label class="sr-only" for="sort">Sort</label>';
+    html += '<select class="sel" id="sort">';
+    html += '<option value="material"' + (s.sort === 'material' ? ' selected' : '') + '>Sort: material</option>';
+    html += '<option value="name"' + (s.sort === 'name' ? ' selected' : '') + '>Sort: name</option>';
+    html += '<option value="color"' + (s.sort === 'color' ? ' selected' : '') + '>Sort: color</option>';
+    html += '<option value="hand"' + (s.sort === 'hand' ? ' selected' : '') + '>Sort: most on hand</option>';
+    html += '</select></div>';
+    document.getElementById('filters').innerHTML = html;
+  }
+  function renderMain() {
+    var items = filteredItems();
+    var s = state.settings;
+    var main = document.getElementById('main');
+    if (!items.length) {
+      main.innerHTML = '<div class="empty"><h2>No filaments match</h2><p>Try clearing the search or filters, or add a spool.</p></div>';
+      return;
+    }
+    var html = '', i, it, group, lastGroup = null, low, title;
+    if (s.view === 'grid') {
+      html += '<div class="grid">';
+      for (i = 0; i < items.length; i++) {
+        it = items[i];
+        low = isLow(it, s.lowStockThreshold);
+        title = it.color_name || it.color_hex || '(no color)';
+        html += '<button type="button" class="grid-card' + (low ? ' is-low' : '') + '" data-open="' + esc(it.id) + '">';
+        html += swatchHTML(it.color_hex);
+        html += '<div class="g-body"><h3>' + esc(title) + '</h3>';
+        html += '<div class="g-mat">' + esc(it.material) + (it.brand ? ' \u00b7 ' + esc(it.brand) : '') + (it.product_line ? ' \u00b7 ' + esc(it.product_line) : '') + '</div>';
+        html += '<div class="g-qty' + (totalSpools(it) == null ? ' qty-unknown' : '') + '">' + esc(qtyLabel(it)) + '</div>';
+        if (low) html += '<span class="badge badge-low">Low</span>';
+        html += '</div></button>';
+      }
+      html += '</div>';
+    } else {
+      for (i = 0; i < items.length; i++) {
+        it = items[i];
+        group = s.sort === 'hand' ? '' : it.material;
+        if (group && group !== lastGroup) {
+          html += '<div class="group-h">' + esc(group) + '</div>';
+          lastGroup = group;
+        }
+        low = isLow(it, s.lowStockThreshold);
+        title = it.color_name || it.color_hex || '(no color)';
+        html += '<article class="card' + (low ? ' is-low' : '') + '" data-id="' + esc(it.id) + '">';
+        html += swatchHTML(it.color_hex);
+        html += '<div class="card-body">';
+        html += '<h3 class="card-title">' + esc(title);
+        if (it.color_hex) html += ' <span class="hex-label">' + esc(normalizeHex(it.color_hex) || it.color_hex) + '</span>';
+        if (low) html += ' <span class="badge badge-low">Low</span>';
+        if (isYes(it.seeded) && totalSpools(it) == null) html += ' <span class="badge badge-seed">count me</span>';
+        html += '</h3>';
+        html += '<div class="meta"><strong>' + esc(it.material) + '</strong>';
+        if (it.brand) html += ' \u00b7 ' + esc(it.brand);
+        if (it.product_line) html += ' \u00b7 ' + esc(it.product_line);
+        if (it.finish) html += ' \u00b7 ' + esc(it.finish);
+        if (it.diameter_mm) html += ' \u00b7 ' + esc(it.diameter_mm) + ' mm';
+        html += '</div>';
+        var loc = [];
+        if (it.location) loc.push(it.location);
+        if (isYes(it.presets_k1c)) loc.push('K1C');
+        if (isYes(it.presets_k2)) loc.push('K2 Pro');
+        if (loc.length) html += '<div class="meta">' + esc(loc.join(' \u00b7 ')) + '</div>';
+        if (it.notes) html += '<div class="notes-preview">' + esc(it.notes) + '</div>';
+        html += '<div class="card-actions">';
+        html += '<div class="stepper" data-step="' + esc(it.id) + '">';
+        html += '<button type="button" class="step-btn" data-delta="-1" aria-label="Remove sealed spool">\u2212</button>';
+        html += '<div class="step-val">' + (it.spools_sealed === '' || it.spools_sealed == null ? '\u2014' : esc(String(it.spools_sealed))) + '<span>sealed</span></div>';
+        html += '<button type="button" class="step-btn" data-delta="1" aria-label="Add sealed spool">+</button>';
+        html += '</div>';
+        html += '<div class="meta" style="min-width:90px">' + (it.spools_opened === '' || it.spools_opened == null ? '<span class="qty-unknown">opened \u2014</span>' : '<strong>' + esc(String(it.spools_opened)) + '</strong> opened') + '</div>';
+        html += '<button type="button" class="btn" data-used="' + esc(it.id) + '">Used a spool</button>';
+        html += '<button type="button" class="btn btn-primary" data-open="' + esc(it.id) + '">Edit</button>';
+        html += '</div></div></article>';
+      }
+    }
+    main.innerHTML = html;
+  }
+  function renderAll() {
+    applyTheme();
+    renderFilters();
+    renderMain();
+  }
+  function findItem(id) {
+    var i;
+    for (i = 0; i < state.items.length; i++) {
+      if (state.items[i].id === id) return state.items[i];
+    }
+    return null;
+  }
+  function findItemIndex(id) {
+    var i;
+    for (i = 0; i < state.items.length; i++) {
+      if (state.items[i].id === id) return i;
+    }
+    return -1;
+  }
+  function bumpSealed(id, delta) {
+    var it = findItem(id);
+    if (!it) return;
+    var n = parseNum(it.spools_sealed);
+    if (n == null) n = 0;
+    n = n + delta;
+    if (n < 0) n = 0;
+    it.spools_sealed = String(n);
+    saveItems();
+    renderMain();
+  }
+  function usedSpool(id) {
+    var it = findItem(id);
+    if (!it) return;
+    var opened = parseNum(it.spools_opened);
+    var sealed = parseNum(it.spools_sealed);
+    if (opened != null && opened > 0) {
+      it.spools_opened = String(opened - 1);
+      it.grams_remaining = '';
+      saveItems();
+      renderMain();
+      toast('Marked one opened spool as used');
+      return;
+    }
+    if (sealed != null && sealed > 0) {
+      it.spools_sealed = String(sealed - 1);
+      it.grams_remaining = '';
+      saveItems();
+      renderMain();
+      toast('Marked one sealed spool as used');
+      return;
+    }
+    toast('No spool count to deduct \u2014 set a count first');
+  }
+
+  function openPanel(id) { document.getElementById(id).className = 'panel-root is-open'; }
+  function closePanel(id) { document.getElementById(id).className = 'panel-root'; }
+
+  var editingId = null;
+  var camCallback = null;
+  var camState = null;
+  var rapidSession = [];
+  var rapidSticky = {material: 'PLA', brand: 'Generic', diameter_mm: '1.75', product_line: '', finish: 'basic'};
+  var confirmCb = null;
+
+  function fieldHTML(name, label, value, attrs) {
+    attrs = attrs || '';
+    return '<div class="field"><label for="f-' + name + '">' + esc(label) + '</label>' +
+      '<input id="f-' + name + '" name="' + name + '" type="text" value="' + esc(value == null ? '' : value) + '" ' + attrs + '></div>';
+  }
+  function renderEdit(item, isNew) {
+    editingId = item.id;
+    document.getElementById('edit-title').textContent = isNew ? 'Add filament' : (item.color_name || item.material || 'Filament');
+    document.getElementById('btn-delete-edit').style.display = isNew ? 'none' : '';
+    var h = '<div class="form-grid">';
+    h += '<div class="field"><label for="f-material">Material</label><select id="f-material" name="material">' + materialOptions(item.material) + '</select></div>';
+    h += fieldHTML('brand', 'Brand', item.brand);
+    h += fieldHTML('product_line', 'Product line', item.product_line, 'placeholder="CR-PLA, Hyper PLA\u2026"');
+    h += '<div class="field"><label for="f-finish">Finish</label><select id="f-finish" name="finish">';
+    var i;
+    for (i = 0; i < FINISHES.length; i++) {
+      h += '<option value="' + FINISHES[i] + '"' + (item.finish === FINISHES[i] ? ' selected' : '') + '>' + FINISHES[i] + '</option>';
+    }
+    h += '</select></div>';
+    h += fieldHTML('color_name', 'Color name', item.color_name);
+    h += '<div class="field full"><span class="lbl">Color swatch</span><div class="color-row">';
+    h += '<input type="color" id="f-colorpicker" value="' + esc(normalizeHex(item.color_hex) || '#FFFFFF') + '" title="Color picker">';
+    h += '<input type="text" id="f-color_hex" name="color_hex" value="' + esc(item.color_hex || '') + '" placeholder="#RRGGBB" spellcheck="false" autocomplete="off" maxlength="9">';
+    h += '<button type="button" class="btn" id="btn-edit-camera">Camera</button>';
+    h += '</div></div>';
+    h += fieldHTML('diameter_mm', 'Diameter (mm)', item.diameter_mm || '1.75', 'inputmode="decimal"');
+    h += fieldHTML('spools_sealed', 'Spools sealed', item.spools_sealed, 'inputmode="numeric" placeholder="unknown"');
+    h += fieldHTML('spools_opened', 'Spools opened', item.spools_opened, 'inputmode="numeric" placeholder="unknown"');
+    h += fieldHTML('grams_remaining', 'Grams remaining (opened)', item.grams_remaining, 'inputmode="decimal" placeholder="unknown"');
+    h += fieldHTML('spool_capacity_g', 'Spool capacity (g)', item.spool_capacity_g || '1000', 'inputmode="numeric"');
+    h += fieldHTML('location', 'Storage location', item.location);
+    h += '<div class="field"><label for="f-date_opened">Date opened</label><input type="date" id="f-date_opened" name="date_opened" value="' + esc(item.date_opened || '') + '"></div>';
+    h += '<div class="field"><label for="f-date_dried">Date dried</label><input type="date" id="f-date_dried" name="date_dried" value="' + esc(item.date_dried || '') + '"></div>';
+    h += fieldHTML('low_stock_threshold', 'Low-stock threshold (spools)', item.low_stock_threshold, 'inputmode="numeric" placeholder="use default (' + state.settings.lowStockThreshold + ')"');
+    h += '<div class="field full"><label for="f-notes">Notes</label><textarea id="f-notes" name="notes">' + esc(item.notes) + '</textarea></div>';
+    h += '<div class="field full"><span class="lbl">Printer presets that suit it</span><div class="checks">';
+    h += '<label><input type="checkbox" id="f-presets_k1c"' + (isYes(item.presets_k1c) ? ' checked' : '') + '> K1C</label>';
+    h += '<label><input type="checkbox" id="f-presets_k2"' + (isYes(item.presets_k2) ? ' checked' : '') + '> K2 Pro</label>';
+    h += '</div></div></div>';
+    document.getElementById('edit-body').innerHTML = h;
+    openPanel('panel-edit');
+    wireEditColor();
+  }
+  function wireEditColor() {
+    var picker = document.getElementById('f-colorpicker');
+    var hex = document.getElementById('f-color_hex');
+    var name = document.getElementById('f-color_name');
+    if (picker) {
+      picker.addEventListener('input', function () {
+        hex.value = normalizeHex(picker.value);
+        if (name && !trim(name.value)) name.value = nearestColorName(hex.value);
+      });
+    }
+    if (hex) {
+      hex.addEventListener('change', function () {
+        var n = normalizeHex(hex.value);
+        if (n) {
+          hex.value = n;
+          picker.value = n.toLowerCase();
+          if (name && !trim(name.value)) name.value = nearestColorName(n);
+        }
+      });
+    }
+    var cam = document.getElementById('btn-edit-camera');
+    if (cam) {
+      cam.addEventListener('click', function () {
+        startCamera(function (result) {
+          if (!result) return;
+          hex.value = result.hex;
+          if (result.hex) picker.value = result.hex.toLowerCase();
+          if (result.name) name.value = result.name;
+        });
+      });
+    }
+  }
+  function readEditForm() {
+    function val(id) {
+      var el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+    var it = findItem(editingId);
+    if (!it) {
+      it = {id: editingId};
+      state.items.push(it);
+    }
+    it.material = val('f-material');
+    it.brand = val('f-brand');
+    it.product_line = val('f-product_line');
+    it.finish = val('f-finish');
+    it.color_name = val('f-color_name');
+    it.color_hex = normalizeHex(val('f-color_hex')) || val('f-color_hex');
+    it.diameter_mm = val('f-diameter_mm') || '1.75';
+    it.spools_sealed = trim(val('f-spools_sealed'));
+    it.spools_opened = trim(val('f-spools_opened'));
+    it.grams_remaining = trim(val('f-grams_remaining'));
+    it.spool_capacity_g = val('f-spool_capacity_g') || '1000';
+    it.location = val('f-location');
+    it.date_opened = val('f-date_opened');
+    it.date_dried = val('f-date_dried');
+    it.low_stock_threshold = trim(val('f-low_stock_threshold'));
+    it.notes = val('f-notes');
+    it.presets_k1c = document.getElementById('f-presets_k1c').checked ? 'yes' : '';
+    it.presets_k2 = document.getElementById('f-presets_k2').checked ? 'yes' : '';
+    return it;
+  }
+  function saveEdit() {
+    readEditForm();
+    saveItems();
+    closePanel('panel-edit');
+    renderAll();
+    toast('Saved');
+  }
+
+  function startCamera(cb) {
+    camCallback = cb;
+    var input = document.getElementById('file-camera');
+    input.value = '';
+    input.click();
+  }
+  function openCameraUI(canvas, ctx) {
+    camState = {
+      canvas: canvas, ctx: ctx,
+      rx: canvas.width / 2, ry: canvas.height / 2,
+      wb: null, wbMode: false, hex: '', name: ''
+    };
+    var h = '';
+    h += '<p class="hint" id="cam-hint">Tap or drag the reticle on the filament. The app averages a 15\u00d715 pixel patch and ignores the brightest 10% (specular highlights).</p>';
+    h += '<div class="cam-stage" id="cam-stage"></div>';
+    h += '<div class="cam-tools">';
+    h += '<button type="button" class="btn" id="btn-wb">White balance: tap a white or gray card</button>';
+    h += '<button type="button" class="btn" id="btn-wb-clear">Clear white balance</button>';
+    h += '<span id="wb-status"></span></div>';
+    h += '<div class="sample-preview"><div class="big-swatch" id="cam-swatch"></div><div>';
+    h += '<div><strong id="cam-name">\u2014</strong></div>';
+    h += '<div class="color-row" style="margin-top:8px">';
+    h += '<input type="color" id="cam-picker" value="#FFFFFF">';
+    h += '<input type="text" id="cam-hex" value="" placeholder="#RRGGBB" spellcheck="false" maxlength="9">';
+    h += '</div></div></div>';
+    document.getElementById('camera-body').innerHTML = h;
+    var stage = document.getElementById('cam-stage');
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+    canvas.style.maxHeight = '62vh';
+    canvas.id = 'cam-canvas';
+    stage.appendChild(canvas);
+    var ret = document.createElement('div');
+    ret.className = 'reticle';
+    ret.id = 'cam-reticle';
+    ret.innerHTML = '<div class="ring"></div>';
+    stage.appendChild(ret);
+    openPanel('panel-camera');
+    setTimeout(function () { positionReticle(); resample(); }, 50);
+
+    function canvasPoint(evt) {
+      var rect = canvas.getBoundingClientRect();
+      var x = (evt.clientX - rect.left) / rect.width * canvas.width;
+      var y = (evt.clientY - rect.top) / rect.height * canvas.height;
+      if (x < 0) x = 0;
+      if (y < 0) y = 0;
+      if (x > canvas.width) x = canvas.width;
+      if (y > canvas.height) y = canvas.height;
+      return {x: x, y: y};
+    }
+    function positionReticle() {
+      var rect = canvas.getBoundingClientRect();
+      var stageRect = stage.getBoundingClientRect();
+      var px = rect.left - stageRect.left + (camState.rx / canvas.width) * rect.width;
+      var py = rect.top - stageRect.top + (camState.ry / canvas.height) * rect.height;
+      ret.style.left = px + 'px';
+      ret.style.top = py + 'px';
+    }
+    function resample() {
+      var rgb = samplePatch(ctx, camState.rx, camState.ry, PATCH, camState.wb);
+      if (!rgb) return;
+      var hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+      var name = nearestColorName(hex);
+      camState.hex = hex;
+      camState.name = name;
+      document.getElementById('cam-swatch').style.background = hex;
+      document.getElementById('cam-name').textContent = name;
+      document.getElementById('cam-hex').value = hex;
+      document.getElementById('cam-picker').value = hex.toLowerCase();
+    }
+    camState.resample = resample;
+    camState.positionReticle = positionReticle;
+    var dragging = false;
+    function onDown(evt) {
+      evt.preventDefault();
+      dragging = true;
+      if (stage.setPointerCapture && evt.pointerId != null) {
+        try { stage.setPointerCapture(evt.pointerId); } catch (e) {}
+      }
+      var p = canvasPoint(evt);
+      camState.rx = p.x;
+      camState.ry = p.y;
+      if (camState.wbMode) {
+        var ref = samplePatch(ctx, camState.rx, camState.ry, PATCH, null);
+        if (ref) {
+          camState.wb = gainsFromReference(ref);
+          camState.wbMode = false;
+          document.getElementById('wb-status').innerHTML = '<span class="wb-on">White balance on</span>';
+          document.getElementById('cam-hint').textContent = 'White balance set. Now tap the filament to sample its color.';
+        }
+      }
+      positionReticle();
+      resample();
+    }
+    function onMove(evt) {
+      if (!dragging) return;
+      evt.preventDefault();
+      var p = canvasPoint(evt);
+      camState.rx = p.x;
+      camState.ry = p.y;
+      positionReticle();
+      resample();
+    }
+    function onUp() { dragging = false; }
+    stage.addEventListener('pointerdown', onDown);
+    stage.addEventListener('pointermove', onMove);
+    stage.addEventListener('pointerup', onUp);
+    stage.addEventListener('pointercancel', onUp);
+    stage.addEventListener('mousedown', onDown);
+    stage.addEventListener('mousemove', function (e) { if (dragging) onMove(e); });
+    stage.addEventListener('mouseup', onUp);
+    stage.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches[0]) { onDown(e.touches[0]); e.preventDefault(); }
+    }, {passive: false});
+    stage.addEventListener('touchmove', function (e) {
+      if (e.touches && e.touches[0]) { onMove(e.touches[0]); e.preventDefault(); }
+    }, {passive: false});
+    stage.addEventListener('touchend', onUp);
+    document.getElementById('btn-wb').addEventListener('click', function () {
+      camState.wbMode = true;
+      document.getElementById('cam-hint').textContent = 'Tap a white or gray reference (for example a paper card) to correct the color cast.';
+      document.getElementById('wb-status').textContent = 'Tap the card\u2026';
+    });
+    document.getElementById('btn-wb-clear').addEventListener('click', function () {
+      camState.wb = null;
+      camState.wbMode = false;
+      document.getElementById('wb-status').textContent = '';
+      document.getElementById('cam-hint').textContent = 'Tap or drag the reticle on the filament.';
+      resample();
+    });
+    document.getElementById('cam-hex').addEventListener('change', function () {
+      var n = normalizeHex(this.value);
+      if (n) {
+        camState.hex = n;
+        camState.name = nearestColorName(n);
+        document.getElementById('cam-swatch').style.background = n;
+        document.getElementById('cam-name').textContent = camState.name;
+        document.getElementById('cam-picker').value = n.toLowerCase();
+        this.value = n;
+      }
+    });
+    document.getElementById('cam-picker').addEventListener('input', function () {
+      var n = normalizeHex(this.value);
+      camState.hex = n;
+      camState.name = nearestColorName(n);
+      document.getElementById('cam-swatch').style.background = n;
+      document.getElementById('cam-name').textContent = camState.name;
+      document.getElementById('cam-hex').value = n;
+    });
+  }
+  function loadPhotoFile(file) {
+    if (!file) return;
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      /* Safari 15 auto-orients JPEGs drawn from an img. We draw from img, then downscale to max 1200 px. */
+      var result = downscaleImageToCanvas(img, PHOTO_MAX);
+      URL.revokeObjectURL(url);
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+      openCameraUI(result.canvas, result.ctx);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      toast('Could not read that photo');
+    };
+    img.src = url;
+  }
+  function finishCamera(useIt) {
+    var cb = camCallback;
+    var result = null;
+    if (useIt && camState && camState.hex) result = {hex: camState.hex, name: camState.name};
+    closePanel('panel-camera');
+    document.getElementById('camera-body').innerHTML = '';
+    camState = null;
+    camCallback = null;
+    if (cb) cb(result);
+  }
+
+  function renderRapid() {
+    var st = rapidSticky;
+    var h = '';
+    h += '<div class="sticky-bar"><p class="hint" style="margin:0 0 8px">Material (and brand / diameter) stay selected. Each new spool: camera, tap color, enter weight, then Save &amp; next.</p>';
+    h += '<div class="form-grid">';
+    h += '<div class="field"><label for="r-material">Material</label><select id="r-material">' + materialOptions(st.material) + '</select></div>';
+    h += '<div class="field"><label for="r-brand">Brand</label><input type="text" id="r-brand" value="' + esc(st.brand) + '"></div>';
+    h += '<div class="field"><label for="r-line">Product line</label><input type="text" id="r-line" value="' + esc(st.product_line) + '"></div>';
+    h += '<div class="field narrow"><label for="r-dia">Diameter</label><input type="text" id="r-dia" value="' + esc(st.diameter_mm) + '" inputmode="decimal"></div>';
+    h += '<div class="field narrow"><label for="r-finish">Finish</label><select id="r-finish">';
+    var i;
+    for (i = 0; i < FINISHES.length; i++) {
+      h += '<option value="' + FINISHES[i] + '"' + (st.finish === FINISHES[i] ? ' selected' : '') + '>' + FINISHES[i] + '</option>';
+    }
+    h += '</select></div></div></div>';
+    h += '<div class="form-grid">';
+    h += '<div class="field full"><span class="lbl">Color</span><div class="color-row">';
+    h += '<input type="color" id="r-picker" value="#FFFFFF">';
+    h += '<input type="text" id="r-hex" placeholder="#RRGGBB" spellcheck="false" maxlength="9">';
+    h += '<input type="text" id="r-name" placeholder="Color name">';
+    h += '<button type="button" class="btn btn-primary" id="r-camera">Camera</button>';
+    h += '</div></div>';
+    h += '<div class="field"><label for="r-weight">Approx weight (grams)</label>';
+    h += '<input type="text" id="r-weight" inputmode="numeric" pattern="[0-9]*" placeholder="grams">';
+    h += '<div class="weight-btns">';
+    for (i = 0; i < WEIGHT_QUICK.length; i++) {
+      h += '<button type="button" class="btn" data-w="' + WEIGHT_QUICK[i] + '">' + WEIGHT_QUICK[i] + ' g</button>';
+    }
+    h += '</div></div></div>';
+    h += '<div style="margin:16px 0"><button type="button" class="btn btn-primary btn-lg" id="r-save">Save &amp; next</button></div>';
+    h += '<div class="session-list"><h3>This session (' + rapidSession.length + ')</h3><div id="r-session"></div></div>';
+    document.getElementById('rapid-body').innerHTML = h;
+    renderRapidSession();
+    openPanel('panel-rapid');
+    document.getElementById('r-camera').addEventListener('click', function () {
+      startCamera(function (result) {
+        if (!result) return;
+        document.getElementById('r-hex').value = result.hex;
+        document.getElementById('r-name').value = result.name;
+        if (result.hex) document.getElementById('r-picker').value = result.hex.toLowerCase();
+      });
+    });
+    document.getElementById('r-picker').addEventListener('input', function () {
+      var n = normalizeHex(this.value);
+      document.getElementById('r-hex').value = n;
+      if (!trim(document.getElementById('r-name').value)) document.getElementById('r-name').value = nearestColorName(n);
+    });
+    document.getElementById('r-hex').addEventListener('change', function () {
+      var n = normalizeHex(this.value);
+      if (n) {
+        this.value = n;
+        document.getElementById('r-picker').value = n.toLowerCase();
+        if (!trim(document.getElementById('r-name').value)) document.getElementById('r-name').value = nearestColorName(n);
+      }
+    });
+    var btns = document.querySelectorAll('#rapid-body [data-w]');
+    for (i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        document.getElementById('r-weight').value = this.getAttribute('data-w');
+      });
+    }
+    document.getElementById('r-save').addEventListener('click', saveRapidNext);
+  }
+  function readSticky() {
+    rapidSticky.material = document.getElementById('r-material').value;
+    rapidSticky.brand = document.getElementById('r-brand').value;
+    rapidSticky.product_line = document.getElementById('r-line').value;
+    rapidSticky.diameter_mm = document.getElementById('r-dia').value || '1.75';
+    rapidSticky.finish = document.getElementById('r-finish').value;
+  }
+  function saveRapidNext() {
+    readSticky();
+    var hex = normalizeHex(document.getElementById('r-hex').value) || document.getElementById('r-hex').value;
+    var name = trim(document.getElementById('r-name').value);
+    if (!name && hex) name = nearestColorName(hex);
+    var weight = trim(document.getElementById('r-weight').value);
+    var cap = String(state.settings.defaultCapacity || 1000);
+    var item = {
+      id: uid(),
+      material: rapidSticky.material,
+      brand: rapidSticky.brand,
+      product_line: rapidSticky.product_line,
+      color_name: name,
+      color_hex: hex,
+      finish: rapidSticky.finish,
+      diameter_mm: rapidSticky.diameter_mm,
+      spools_sealed: '',
+      spools_opened: '',
+      grams_remaining: '',
+      spool_capacity_g: cap,
+      location: '', date_opened: '', date_dried: '', notes: '',
+      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: ''
+    };
+    var w = parseNum(weight);
+    var c = parseNum(cap) || 1000;
+    if (w != null) {
+      if (w >= c) {
+        item.spools_sealed = '1';
+        item.spools_opened = '0';
+        item.grams_remaining = '';
+      } else {
+        item.spools_sealed = '0';
+        item.spools_opened = '1';
+        item.grams_remaining = String(w);
+        item.date_opened = new Date().toISOString().substring(0, 10);
+      }
+    }
+    state.items.unshift(item);
+    rapidSession.push({id: item.id});
+    saveItems();
+    document.getElementById('r-hex').value = '';
+    document.getElementById('r-name').value = '';
+    document.getElementById('r-picker').value = '#FFFFFF';
+    document.getElementById('r-weight').value = '';
+    renderRapidSession();
+    renderAll();
+    toast('Saved ' + (name || item.material) + (w != null ? ' \u00b7 ' + w + ' g' : '') + '. Ready for the next spool.');
+    document.getElementById('r-camera').focus();
+  }
+  function renderRapidSession() {
+    var el = document.getElementById('r-session');
+    if (!el) return;
+    var h3 = el.parentNode && el.parentNode.querySelector('h3');
+    if (!rapidSession.length) {
+      el.innerHTML = '<p class="hint">Nothing added yet this session.</p>';
+      if (h3) h3.textContent = 'This session (0)';
+      return;
+    }
+    var html = '', i, it;
+    for (i = rapidSession.length - 1; i >= 0; i--) {
+      it = findItem(rapidSession[i].id);
+      if (!it) continue;
+      html += '<div class="session-item">';
+      html += '<div class="mini" style="background:' + esc(normalizeHex(it.color_hex) || 'transparent') + '"></div>';
+      html += '<div style="flex:1"><strong>' + esc(it.color_name || it.color_hex || it.material) + '</strong> \u00b7 ' +
+        esc(it.material) + (it.brand ? ' \u00b7 ' + esc(it.brand) : '') +
+        ' \u00b7 ' + esc(qtyLabel(it)) + '</div>';
+      html += '<button type="button" class="btn" data-undo="' + esc(it.id) + '">Undo</button></div>';
+    }
+    el.innerHTML = html;
+    if (h3) h3.textContent = 'This session (' + rapidSession.length + ')';
+    var undos = el.querySelectorAll('[data-undo]');
+    for (i = 0; i < undos.length; i++) {
+      undos[i].addEventListener('click', function () {
+        undoRapid(this.getAttribute('data-undo'));
+      });
+    }
+  }
+  function undoRapid(id) {
+    var idx = findItemIndex(id);
+    if (idx !== -1) state.items.splice(idx, 1);
+    var i;
+    for (i = rapidSession.length - 1; i >= 0; i--) {
+      if (rapidSession[i].id === id) rapidSession.splice(i, 1);
+    }
+    saveItems();
+    renderRapidSession();
+    renderAll();
+    toast('Removed from inventory');
+  }
+
+  function renderCsvPanel() {
+    var h = '';
+    h += '<p class="hint">Inventory lives only on this iPad. Save a CSV to OneDrive so it can be used for print planning. iPadOS may clear Home Screen app storage if the app sits unused for a long time \u2014 a CSV backup is the safety net.</p>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">';
+    h += '<button type="button" class="btn btn-primary btn-lg" id="csv-save">Save CSV</button>';
+    h += '<button type="button" class="btn" id="csv-download">Download</button>';
+    h += '<button type="button" class="btn" id="csv-copy">Copy CSV</button>';
+    h += '<button type="button" class="btn" id="csv-import">Import CSV</button></div>';
+    h += '<div class="help-block"><h3>CSV header (stable)</h3>';
+    h += '<p class="mono">' + esc(CSV_HEADERS.join(',')) + '</p>';
+    h += '<p>Blank <span class="mono">spools_sealed</span>, <span class="mono">spools_opened</span>, and <span class="mono">grams_remaining</span> mean unknown, not zero. <span class="mono">presets_k1c</span> and <span class="mono">presets_k2</span> are \u201cyes\u201d when that printer\u2019s presets suit the filament. Dates are YYYY-MM-DD.</p></div>';
+    h += '<label class="lbl" for="csv-text">CSV</label>';
+    h += '<textarea class="csv-box" id="csv-text" spellcheck="false"></textarea>';
+    document.getElementById('csv-body').innerHTML = h;
+    document.getElementById('csv-text').value = toCSV(state.items);
+    openPanel('panel-csv');
+    document.getElementById('csv-save').addEventListener('click', function () { saveCsv(); });
+    document.getElementById('csv-download').addEventListener('click', function () { downloadCsv(); });
+    document.getElementById('csv-copy').addEventListener('click', function () { copyCsv(); });
+    document.getElementById('csv-import').addEventListener('click', function () {
+      document.getElementById('file-import').value = '';
+      document.getElementById('file-import').click();
+    });
+  }
+  function csvBlob() {
+    var csv = toCSV(state.items);
+    var name = 'filament-inventory-' + dateStamp() + '.csv';
+    var blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+    return {blob: blob, name: name, csv: csv};
+  }
+  function downloadCsv() {
+    var f = csvBlob();
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(f.blob);
+    a.download = f.name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      URL.revokeObjectURL(a.href);
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 1000);
+    toast('Download started: ' + f.name);
+  }
+  function copyCsv() {
+    var f = csvBlob();
+    var ta = document.getElementById('csv-text');
+    if (ta) ta.value = f.csv;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(f.csv).then(function () {
+        toast('CSV copied to the clipboard');
+      }).catch(function () { fallbackCopy(f.csv); });
+    } else {
+      fallbackCopy(f.csv);
+    }
+  }
+  function fallbackCopy(text) {
+    var ta = document.getElementById('csv-text');
+    if (!ta) return;
+    ta.value = text;
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      toast('CSV copied to the clipboard');
+    } catch (e) {
+      toast('Select the text below and copy it');
+    }
+  }
+  function saveCsv() {
+    var f = csvBlob();
+    var ta = document.getElementById('csv-text');
+    if (ta) ta.value = f.csv;
+    function fallback() {
+      downloadCsv();
+      toast('Share was not available \u2014 downloaded, and you can copy the text below');
+    }
+    if (typeof File === 'undefined' || !navigator.share) { fallback(); return; }
+    var file;
+    try { file = new File([f.blob], f.name, {type: 'text/csv'}); }
+    catch (e) { fallback(); return; }
+    var shareData = {title: 'Filament Inventory', text: 'Filament inventory CSV', files: [file]};
+    var can = true;
+    try {
+      if (navigator.canShare && !navigator.canShare({files: [file]})) can = false;
+    } catch (e2) {}
+    if (!can) { fallback(); return; }
+    navigator.share(shareData).then(function () {
+      toast('CSV handed to the share sheet');
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;
+      fallback();
+    });
+  }
+  function importCsvText(text) {
+    var incoming = itemsFromCSV(text);
+    if (!incoming.length) { toast('No rows found in that CSV'); return; }
+    var byId = {}, i;
+    for (i = 0; i < state.items.length; i++) byId[state.items[i].id] = i;
+    var added = 0, updated = 0;
+    for (i = 0; i < incoming.length; i++) {
+      var it = incoming[i];
+      if (it.id && byId[it.id] != null) {
+        state.items[byId[it.id]] = it;
+        updated += 1;
+      } else {
+        if (!it.id) it.id = uid();
+        state.items.push(it);
+        byId[it.id] = state.items.length - 1;
+        added += 1;
+      }
+    }
+    saveItems();
+    renderAll();
+    var ta = document.getElementById('csv-text');
+    if (ta) ta.value = toCSV(state.items);
+    toast('Imported: ' + added + ' added, ' + updated + ' updated');
+  }
+
+  function renderSettings() {
+    var s = state.settings;
+    var h = '';
+    h += '<div class="help-block"><h3>Add to iPad Home Screen</h3>';
+    h += '<p>In Safari, open this page, tap the Share button, then <strong>Add to Home Screen</strong>. The app works offline and keeps its data on the iPad. Save a CSV now and then \u2014 iPadOS may clear storage if the Home Screen app is unused for a long time.</p></div>';
+    h += '<div class="form-grid">';
+    h += '<div class="field"><label for="s-theme">Appearance</label><select id="s-theme">';
+    h += '<option value="system"' + (s.theme === 'system' ? ' selected' : '') + '>System</option>';
+    h += '<option value="light"' + (s.theme === 'light' ? ' selected' : '') + '>Light</option>';
+    h += '<option value="dark"' + (s.theme === 'dark' ? ' selected' : '') + '>Dark</option>';
+    h += '</select></div>';
+    h += '<div class="field"><label for="s-low">Default low-stock threshold (total spools)</label>';
+    h += '<input type="text" id="s-low" inputmode="numeric" value="' + esc(String(s.lowStockThreshold)) + '"></div>';
+    h += '<div class="field"><label for="s-cap">Default spool capacity (g)</label>';
+    h += '<input type="text" id="s-cap" inputmode="numeric" value="' + esc(String(s.defaultCapacity)) + '"></div></div>';
+    h += '<div class="help-block" style="margin-top:16px"><h3>About this list</h3>';
+    h += '<p>' + state.items.length + ' filaments on this iPad. Seeded entries came from print history and K2 CFS slot records; their counts are blank until you fill them in. The seed list (materials and colors only) is public in the app files; your counts never leave the iPad unless you export a CSV.</p></div>';
+    h += '<p><button type="button" class="btn btn-danger" id="s-reset">Reset to seed list</button></p>';
+    h += '<p class="hint">Reset removes counts you have entered and restores the starting list from print history.</p>';
+    document.getElementById('settings-body').innerHTML = h;
+    openPanel('panel-settings');
+    document.getElementById('s-theme').addEventListener('change', function () {
+      state.settings.theme = this.value;
+      saveSettings();
+      applyTheme();
+    });
+    document.getElementById('s-low').addEventListener('change', function () {
+      var n = parseNum(this.value);
+      if (n == null || n < 0) n = 1;
+      state.settings.lowStockThreshold = n;
+      saveSettings();
+      renderAll();
+    });
+    document.getElementById('s-cap').addEventListener('change', function () {
+      var n = parseNum(this.value);
+      if (n == null || n <= 0) n = 1000;
+      state.settings.defaultCapacity = n;
+      saveSettings();
+    });
+    document.getElementById('s-reset').addEventListener('click', function () {
+      askConfirm('Replace your inventory with the original seed list? Counts you entered will be lost unless you already saved a CSV.', 'Reset', function () {
+        state.items = seedList();
+        saveItems();
+        renderAll();
+        closePanel('panel-settings');
+        toast('Restored seed list');
+      });
+    });
+  }
+  function askConfirm(msg, yesLabel, cb) {
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('btn-confirm-yes').textContent = yesLabel || 'OK';
+    confirmCb = cb;
+    openPanel('panel-confirm');
+  }
+
+  function onMainClick(e) {
+    var node = e.target;
+    var rootMain = document.getElementById('main');
+    var rootFilt = document.getElementById('filters');
+    while (node && node !== rootMain && node !== rootFilt) {
+      if (node.getAttribute) {
+        if (node.getAttribute('data-open')) {
+          var it = findItem(node.getAttribute('data-open'));
+          if (it) renderEdit(clone(it), false);
+          return;
+        }
+        if (node.getAttribute('data-used')) { usedSpool(node.getAttribute('data-used')); return; }
+        if (node.getAttribute('data-delta')) {
+          bumpSealed(node.parentNode.getAttribute('data-step'), Number(node.getAttribute('data-delta')));
+          return;
+        }
+        if (node.getAttribute('data-filter')) {
+          state.settings.filter = node.getAttribute('data-filter');
+          saveSettings(); renderAll(); return;
+        }
+        if (node.getAttribute('data-view')) {
+          state.settings.view = node.getAttribute('data-view');
+          saveSettings(); renderAll(); return;
+        }
+        if (node.getAttribute('data-low')) {
+          state.settings.lowOnly = !state.settings.lowOnly;
+          saveSettings(); renderAll(); return;
+        }
+        if (node.getAttribute('data-unknown')) {
+          state.settings.unknownOnly = !state.settings.unknownOnly;
+          saveSettings(); renderAll(); return;
+        }
+      }
+      node = node.parentNode;
+    }
+  }
+  function blankItem() {
+    return {
+      id: uid(), material: 'PLA', brand: 'Generic', product_line: '',
+      color_name: '', color_hex: '', finish: 'basic', diameter_mm: '1.75',
+      spools_sealed: '', spools_opened: '', grams_remaining: '',
+      spool_capacity_g: String(state.settings.defaultCapacity || 1000),
+      location: '', date_opened: '', date_dried: '', notes: '',
+      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: ''
+    };
+  }
+  function bind() {
+    document.getElementById('filters').addEventListener('click', onMainClick);
+    document.getElementById('main').addEventListener('click', onMainClick);
+    document.getElementById('filters').addEventListener('change', function (e) {
+      if (e.target && e.target.id === 'sort') {
+        state.settings.sort = e.target.value;
+        saveSettings();
+        renderAll();
+      }
+    });
+    var search = document.getElementById('search');
+    var searchTimer = null;
+    search.addEventListener('input', function () {
+      var v = search.value;
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () {
+        state.settings.search = v;
+        saveSettings();
+        renderMain();
+      }, 120);
+    });
+    document.getElementById('btn-add').addEventListener('click', function () {
+      var it = blankItem();
+      state.items.unshift(it);
+      renderEdit(it, true);
+    });
+    document.getElementById('btn-rapid').addEventListener('click', renderRapid);
+    document.getElementById('btn-csv').addEventListener('click', renderCsvPanel);
+    document.getElementById('btn-settings').addEventListener('click', renderSettings);
+    document.getElementById('btn-save-edit').addEventListener('click', saveEdit);
+    document.getElementById('btn-save-edit-2').addEventListener('click', saveEdit);
+    document.getElementById('btn-delete-edit').addEventListener('click', function () {
+      askConfirm('Delete this filament from the inventory?', 'Delete', function () {
+        var idx = findItemIndex(editingId);
+        if (idx !== -1) state.items.splice(idx, 1);
+        saveItems();
+        closePanel('panel-edit');
+        closePanel('panel-confirm');
+        renderAll();
+        toast('Deleted');
+      });
+    });
+    document.getElementById('btn-confirm-no').addEventListener('click', function () {
+      closePanel('panel-confirm');
+      confirmCb = null;
+    });
+    document.getElementById('btn-confirm-yes').addEventListener('click', function () {
+      var cb = confirmCb;
+      confirmCb = null;
+      closePanel('panel-confirm');
+      if (cb) cb();
+    });
+    document.getElementById('btn-cam-cancel').addEventListener('click', function () { finishCamera(false); });
+    document.getElementById('btn-cam-use').addEventListener('click', function () { finishCamera(true); });
+    document.getElementById('file-camera').addEventListener('change', function () {
+      if (this.files && this.files[0]) loadPhotoFile(this.files[0]);
+    });
+    document.getElementById('file-import').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { importCsvText(String(reader.result || '')); };
+      reader.readAsText(file);
+    });
+    document.body.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.getAttribute && t.getAttribute('data-close')) {
+        var id = t.getAttribute('data-close');
+        if (id === 'panel-edit') {
+          var it = findItem(editingId);
+          if (it && !it.color_name && !it.color_hex && !it.notes && it.spools_sealed === '' && it.spools_opened === '' && !isYes(it.seeded) && !it.product_line && !trim(it.location)) {
+            var idx = findItemIndex(editingId);
+            if (idx !== -1) {
+              state.items.splice(idx, 1);
+              saveItems();
+              renderAll();
+            }
+          }
+        }
+        closePanel(id);
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        var ids = ['panel-confirm', 'panel-camera', 'panel-csv', 'panel-settings', 'panel-rapid', 'panel-edit'];
+        var i;
+        for (i = 0; i < ids.length; i++) {
+          if (document.getElementById(ids[i]).className.indexOf('is-open') !== -1) {
+            if (ids[i] === 'panel-camera') finishCamera(false);
+            else closePanel(ids[i]);
+            return;
+          }
+        }
+      }
+    });
+  }
+  function featureChecks() {
+    return {
+      localStorage: (function () { try { localStorage.setItem('__fi_t', '1'); localStorage.removeItem('__fi_t'); return true; } catch (e) { return false; } })(),
+      serviceWorker: 'serviceWorker' in navigator,
+      share: typeof navigator.share === 'function',
+      shareFiles: !!(navigator.canShare),
+      fileConstructor: typeof File === 'function',
+      clipboard: !!(navigator.clipboard && navigator.clipboard.writeText),
+      pointerEvents: 'PointerEvent' in window,
+      canvas: !!(document.createElement('canvas').getContext),
+      matchMedia: typeof window.matchMedia === 'function'
+    };
+  }
+  function init() {
+    loadSettings();
+    loadItems();
+    applyTheme();
+    bind();
+    renderAll();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+    window.FilamentApp = {
+      samplePatch: samplePatch,
+      nearestColorName: nearestColorName,
+      gainsFromReference: gainsFromReference,
+      toCSV: toCSV,
+      parseCSV: parseCSV,
+      itemsFromCSV: itemsFromCSV,
+      hexToRgb: hexToRgb,
+      rgbToHex: rgbToHex,
+      normalizeHex: normalizeHex,
+      seedList: seedList,
+      CSV_HEADERS: CSV_HEADERS,
+      COLOR_NAMES: COLOR_NAMES,
+      getState: function () { return state; },
+      saveItems: saveItems,
+      loadItems: loadItems,
+      renderAll: renderAll,
+      featureChecks: featureChecks,
+      downscaleImageToCanvas: downscaleImageToCanvas,
+      PHOTO_MAX: PHOTO_MAX,
+      PATCH: PATCH,
+      openCameraUI: openCameraUI,
+      startCamera: startCamera
+    };
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+  </script>
+</body>
+</html>
