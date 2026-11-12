@@ -791,6 +791,56 @@
       overflow: hidden;
       clip: rect(0,0,0,0);
     }
+
+    #panel-scan { z-index: 55; }
+    .scan-stage {
+      position: relative;
+      background: #111;
+      border-radius: 12px;
+      overflow: hidden;
+      min-height: 280px;
+    }
+    .scan-stage video {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 58vh;
+      min-height: 280px;
+      object-fit: cover;
+      background: #111;
+    }
+    .scan-frame {
+      position: absolute;
+      left: 14%;
+      top: 16%;
+      right: 14%;
+      bottom: 20%;
+      border: 2px solid #fff;
+      border-radius: 16px;
+      box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+      pointer-events: none;
+    }
+    .scan-status { margin-top: 10px; font-weight: 600; }
+    .scan-status.ok { color: var(--ok); }
+    .scan-status.err { color: var(--danger); }
+    .scan-result {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      word-break: break-all;
+    }
+    .scan-result .mono { font-size: 14px; }
+    .scan-manual { margin-top: 16px; }
+    .scan-actions {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
     @media (max-width: 700px) {
       .brand h1 { font-size: 17px; }
       .swatch { width: 72px; min-height: 72px; }
@@ -813,6 +863,7 @@
         </div>
         <div class="top-actions">
           <button type="button" class="btn" id="btn-settings" title="Settings">Settings</button>
+          <button type="button" class="btn" id="btn-scan">Scan</button>
           <button type="button" class="btn" id="btn-csv">CSV</button>
           <button type="button" class="btn" id="btn-rapid">Add spools</button>
           <button type="button" class="btn btn-primary" id="btn-add">+ Add</button>
@@ -821,7 +872,7 @@
       <div class="search-row">
         <div class="search-wrap">
           <span class="search-icon" aria-hidden="true">&#8981;</span>
-          <input type="search" id="search" placeholder="Search color, brand, notes, location&#8230;" autocomplete="off" enterkeyhint="search">
+          <input type="search" id="search" placeholder="Search color, brand, notes, location, barcode&#8230;" autocomplete="off" enterkeyhint="search">
         </div>
       </div>
       <div class="filters" id="filters"></div>
@@ -890,6 +941,17 @@
     </div>
   </div>
 
+  <div class="panel-root" id="panel-scan" role="dialog" aria-modal="true" aria-labelledby="scan-title">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button type="button" class="btn btn-ghost" id="btn-scan-cancel">Cancel</button>
+        <h2 id="scan-title">Scan barcode</h2>
+        <span></span>
+      </div>
+      <div class="panel-body" id="scan-body"></div>
+    </div>
+  </div>
+
   <div class="panel-root" id="panel-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
     <div class="panel" style="max-width:420px;margin:auto">
       <div class="panel-head">
@@ -909,7 +971,9 @@
 
   <input type="file" id="file-camera" accept="image/*" capture="environment" class="sr-only" aria-hidden="true">
   <input type="file" id="file-import" accept=".csv,text/csv,text/plain" class="sr-only" aria-hidden="true">
+  <input type="file" id="file-scan" accept="image/*" class="sr-only" aria-hidden="true">
 
+  <script src="vendor/zxing.min.js"></script>
   <script>
 /* Filament Inventory app — ES2019, Safari 15 / iPadOS 15.8. */
 (function () {
@@ -925,7 +989,7 @@
     'id', 'material', 'brand', 'product_line', 'color_name', 'color_hex',
     'finish', 'diameter_mm', 'spools_sealed', 'spools_opened', 'grams_remaining',
     'spool_capacity_g', 'location', 'date_opened', 'date_dried', 'notes',
-    'presets_k1c', 'presets_k2', 'low_stock_threshold', 'seeded'
+    'presets_k1c', 'presets_k2', 'low_stock_threshold', 'seeded', 'barcode'
   ];
 
   var MATERIALS = ['PLA', 'PLA+', 'PLA-Silk', 'PETG', 'TPU', 'ABS', 'ASA', 'PET-CF', 'Other'];
@@ -1009,7 +1073,8 @@
         presets_k1c: '',
         presets_k2: '',
         low_stock_threshold: '',
-        seeded: 'yes'
+        seeded: 'yes',
+        barcode: ''
       }, o);
     }
     return [
@@ -1340,6 +1405,13 @@
     }
   };
 
+  function normalizeLoadedItems() {
+    var i, it;
+    for (i = 0; i < state.items.length; i++) {
+      it = state.items[i];
+      if (it && it.barcode == null) it.barcode = '';
+    }
+  }
   function loadSettings() {
     try {
       var raw = localStorage.getItem(SETTINGS_KEY);
@@ -1360,6 +1432,7 @@
         var data = JSON.parse(raw);
         if (data && data.items && data.items.length) {
           state.items = data.items;
+          normalizeLoadedItems();
           return;
         }
       }
@@ -1453,6 +1526,430 @@
     }
     return out;
   }
+
+  function normalizeBarcodeValue(s) {
+    return trim(s).replace(/\s+/g, '');
+  }
+  function barcodeMatchKeys(s) {
+    var v = normalizeBarcodeValue(s);
+    var keys = [], seen = {}, i, k;
+    if (!v) return keys;
+    function add(x) {
+      if (!x) return;
+      k = String(x);
+      if (!seen[k]) { seen[k] = true; keys.push(k); }
+    }
+    add(v);
+    add(v.toUpperCase());
+    if (/^\d+$/.test(v)) {
+      if (v.length === 12) add('0' + v);
+      if (v.length === 13 && v.charAt(0) === '0') add(v.substring(1));
+    }
+    return keys;
+  }
+  function findItemByBarcode(code) {
+    var keys = barcodeMatchKeys(code);
+    if (!keys.length) return null;
+    var set = {}, i, it, b, j;
+    for (j = 0; j < keys.length; j++) set[keys[j].toUpperCase()] = true;
+    for (i = 0; i < state.items.length; i++) {
+      it = state.items[i];
+      b = normalizeBarcodeValue(it && it.barcode ? it.barcode : '');
+      if (b && set[b.toUpperCase()]) return it;
+    }
+    return null;
+  }
+
+  function tryParseJSON(text) {
+    var s = trim(text);
+    if (!s) return null;
+    var start = s.indexOf('{');
+    var startArr = s.indexOf('[');
+    if (start === -1 && startArr === -1) return null;
+    if (start === -1 || (startArr !== -1 && startArr < start)) start = startArr;
+    var slice = s.substring(start);
+    try { return JSON.parse(slice); } catch (e) {}
+    /* Truncate to last closing brace if trailing junk is present. */
+    var endObj = slice.lastIndexOf('}');
+    var endArr = slice.lastIndexOf(']');
+    var end = endObj > endArr ? endObj : endArr;
+    if (end > 0) {
+      try { return JSON.parse(slice.substring(0, end + 1)); } catch (e2) {}
+    }
+    return null;
+  }
+
+  function mapMaterial(v) {
+    var s = trim(v);
+    var res = { material: '', finish: '', product_line: '', known: false };
+    if (!s) return res;
+    var i, m, up = s.toUpperCase(), rest, fr, mats;
+    for (i = 0; i < MATERIALS.length; i++) {
+      if (MATERIALS[i].toUpperCase() === up) {
+        res.material = MATERIALS[i];
+        res.known = true;
+        return res;
+      }
+    }
+    var aliases = {
+      'PLA PLUS': 'PLA+', 'PLA-PLUS': 'PLA+', 'PLAPLUS': 'PLA+',
+      'PLA SILK': 'PLA-Silk', 'PLA_SILK': 'PLA-Silk', 'SILK PLA': 'PLA-Silk',
+      'PETCF': 'PET-CF', 'PET CF': 'PET-CF', 'PETG-CF': 'PET-CF', 'CF-PET': 'PET-CF'
+    };
+    if (aliases[up]) {
+      res.material = aliases[up];
+      res.known = true;
+      return res;
+    }
+    mats = MATERIALS.slice().sort(function (a, b) { return b.length - a.length; });
+    for (i = 0; i < mats.length; i++) {
+      m = mats[i];
+      var mu = m.toUpperCase();
+      if (up.indexOf(mu) === 0 && (up.length === mu.length || /[^A-Z0-9+]/.test(up.charAt(mu.length)))) {
+        res.material = m;
+        res.known = true;
+        rest = trim(s.substring(m.length).replace(/^[\s\-_/]+/, ''));
+        fr = rest.toLowerCase();
+        if (fr === 'matte' || fr.indexOf('matte') === 0) res.finish = 'matte';
+        else if (fr === 'silk' || fr.indexOf('silk') === 0) res.finish = 'silk';
+        else if (fr === 'basic') res.finish = 'basic';
+        if (rest) res.product_line = s;
+        return res;
+      }
+    }
+    return res;
+  }
+
+  function coerceHex(val) {
+    if (val == null || val === '') return '';
+    if (typeof val === 'string') return normalizeHex(val);
+    if (Object.prototype.toString.call(val) === '[object Array]' && val.length >= 3) {
+      var r = Number(val[0]), g = Number(val[1]), b = Number(val[2]);
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return rgbToHex(r, g, b);
+    }
+    return '';
+  }
+
+  function isFinishValue(v) {
+    var s = trim(v).toLowerCase();
+    return s === 'basic' || s === 'matte' || s === 'silk';
+  }
+
+  function looksLikeHexColorName(v) {
+    return !!normalizeHex(v);
+  }
+
+  function emptyParsed() {
+    return { raw: '', kind: 'raw', fields: {}, notesBits: [] };
+  }
+
+  function hasParsedFields(parsed) {
+    var k;
+    if (!parsed || !parsed.fields) return false;
+    for (k in parsed.fields) {
+      if (hasOwn(parsed.fields, k) && trim(parsed.fields[k])) return true;
+    }
+    return !!(parsed.notesBits && parsed.notesBits.length);
+  }
+
+  function assignKnownField(fields, notesBits, key, val) {
+    if (val == null) return;
+    if (typeof val === 'object' && !Array.isArray(val)) return;
+    var lk = String(key).toLowerCase().replace(/[\s\-]+/g, '_');
+    var s = Array.isArray(val) ? '' : trim(String(val));
+    var hx;
+    if (lk === 'brand' || lk === 'brand_name' || lk === 'manufacturer' || lk === 'vendor' || lk === 'company') {
+      if (s) fields.brand = s;
+      return;
+    }
+    if (lk === 'material' || lk === 'material_type') {
+      var mm = mapMaterial(s);
+      if (mm.known) {
+        fields.material = mm.material;
+        if (mm.finish) fields.finish = mm.finish;
+        if (mm.product_line && !fields.product_line) fields.product_line = mm.product_line;
+      } else if (s) {
+        fields.material = s;
+      }
+      return;
+    }
+    if (lk === 'type' || lk === 'filament_type') {
+      if (/^openspool$/i.test(s) || /^openprinttag$/i.test(s) || /^open_?print_?tag$/i.test(s)) return;
+      var mt = mapMaterial(s);
+      if (mt.known) {
+        fields.material = mt.material;
+        if (mt.finish) fields.finish = mt.finish;
+        if (mt.product_line) fields.product_line = mt.product_line;
+      } else if (s && !fields.product_line) {
+        fields.product_line = s;
+      }
+      return;
+    }
+    if (lk === 'material_name' || lk === 'product_line' || lk === 'product' || lk === 'product_name' || lk === 'filament' || lk === 'filament_name') {
+      if (s) {
+        if (!fields.product_line) fields.product_line = s;
+        var mn = mapMaterial(s);
+        if (mn.known && !fields.material) {
+          fields.material = mn.material;
+          if (mn.finish && !fields.finish) fields.finish = mn.finish;
+        }
+      }
+      return;
+    }
+    if (lk === 'color_name' || lk === 'colour_name') {
+      if (s && !looksLikeHexColorName(s)) fields.color_name = s;
+      else if (s) {
+        hx = normalizeHex(s);
+        if (hx) fields.color_hex = hx;
+      }
+      return;
+    }
+    if (lk === 'color' || lk === 'colour') {
+      hx = coerceHex(val) || normalizeHex(s);
+      if (hx) fields.color_hex = hx;
+      else if (s) fields.color_name = s;
+      return;
+    }
+    if (lk === 'color_hex' || lk === 'colour_hex' || lk === 'hex' || lk === 'hex_color' || lk === 'hexcolour' || lk === 'primary_color' || lk === 'primary_colour') {
+      hx = coerceHex(val) || normalizeHex(s);
+      if (hx) fields.color_hex = hx;
+      return;
+    }
+    if (lk === 'finish' || lk === 'surface') {
+      if (isFinishValue(s)) fields.finish = s.toLowerCase();
+      return;
+    }
+    if (lk === 'diameter' || lk === 'diameter_mm' || lk === 'filament_diameter' || lk === 'dia') {
+      var d = parseNum(s);
+      if (d != null && d > 0 && d < 10) fields.diameter_mm = String(d);
+      return;
+    }
+    if (lk === 'grams_remaining' || lk === 'remaining' || lk === 'remaining_g' || lk === 'left_g' || lk === 'remaining_weight') {
+      var g = parseNum(s);
+      if (g != null && g >= 0) fields.grams_remaining = String(g);
+      return;
+    }
+    if (lk === 'spool_capacity_g' || lk === 'capacity' || lk === 'capacity_g' || lk === 'nominal_weight' ||
+        lk === 'nominal_netto_full_weight' || lk === 'weight_nominal' || lk === 'net_weight' ||
+        lk === 'net_weight_g' || lk === 'weight_g' || lk === 'weight') {
+      var w = parseNum(s);
+      if (w != null && w > 0) fields.spool_capacity_g = String(w);
+      return;
+    }
+    if ((lk === 'min_temp' || lk === 'max_temp' || lk === 'min_nozzle_temp' || lk === 'max_nozzle_temp') && s) {
+      notesBits.push(lk.replace(/_/g, ' ') + ' ' + s + ' C');
+      return;
+    }
+  }
+
+  function collectKnownFields(obj, fields, notesBits, depth, parentKey) {
+    if (!obj || typeof obj !== 'object' || depth > 3) return;
+    if (Object.prototype.toString.call(obj) === '[object Array]') return;
+    var k, val, lk, parent = parentKey ? String(parentKey).toLowerCase().replace(/[\s\-]+/g, '_') : '';
+    for (k in obj) {
+      if (!hasOwn(obj, k)) continue;
+      val = obj[k];
+      if (val && typeof val === 'object' && Object.prototype.toString.call(val) !== '[object Array]') {
+        collectKnownFields(val, fields, notesBits, depth + 1, k);
+        continue;
+      }
+      lk = String(k).toLowerCase().replace(/[\s\-]+/g, '_');
+      /* FilaStore-style OpenPrintTag JSON uses data.material.name for the type. */
+      if ((lk === 'name' || lk === 'value') && (parent === 'material' || parent === 'filament' || parent === 'type')) {
+        assignKnownField(fields, notesBits, 'material', val);
+        continue;
+      }
+      assignKnownField(fields, notesBits, k, val);
+    }
+  }
+
+  function parseFilamentObject(obj, kindHint) {
+    var out = emptyParsed();
+    if (!obj || typeof obj !== 'object') return out;
+    out.kind = kindHint || 'json';
+    var proto = obj.protocol != null ? String(obj.protocol) : '';
+    var typ = obj.type != null ? String(obj.type) : '';
+    if (/openspool/i.test(proto) || /openspool/i.test(typ)) out.kind = 'openspool-json';
+    else if (/openprinttag/i.test(proto) || /openprinttag/i.test(typ) || obj.material_type != null || obj.brand_name != null || obj.primary_color != null) {
+      out.kind = 'openprinttag-json';
+    }
+    collectKnownFields(obj, out.fields, out.notesBits, 0);
+    return out;
+  }
+
+  function parseOpenSpoolPipe(s) {
+    if (!/^OS\s*[0-9]/i.test(s) || s.indexOf('|') === -1) return null;
+    var parts = s.split('|');
+    if (!/^OS/i.test(trim(parts[0]))) return null;
+    var out = emptyParsed();
+    out.raw = s;
+    out.kind = 'openspool-pipe';
+    if (parts.length > 1 && trim(parts[1])) assignKnownField(out.fields, out.notesBits, 'type', parts[1]);
+    if (parts.length > 2 && trim(parts[2])) assignKnownField(out.fields, out.notesBits, 'color_hex', parts[2]);
+    if (parts.length > 3 && trim(parts[3])) assignKnownField(out.fields, out.notesBits, 'brand', parts[3]);
+    if (parts.length > 4 && trim(parts[4])) assignKnownField(out.fields, out.notesBits, 'min_temp', parts[4]);
+    if (parts.length > 5 && trim(parts[5])) assignKnownField(out.fields, out.notesBits, 'max_temp', parts[5]);
+    return out;
+  }
+
+  function parseQueryString(q) {
+    var obj = {}, i, pair, eq, key, val, parts;
+    if (!q) return obj;
+    parts = String(q).split('&');
+    for (i = 0; i < parts.length; i++) {
+      pair = parts[i];
+      if (!pair) continue;
+      eq = pair.indexOf('=');
+      if (eq === -1) {
+        key = decodeURIComponent(pair.replace(/\+/g, ' '));
+        val = '';
+      } else {
+        key = decodeURIComponent(pair.substring(0, eq).replace(/\+/g, ' '));
+        try { val = decodeURIComponent(pair.substring(eq + 1).replace(/\+/g, ' ')); }
+        catch (e) { val = pair.substring(eq + 1); }
+      }
+      if (key) obj[key] = val;
+    }
+    return obj;
+  }
+
+  function parseFilamentUrl(s) {
+    var q = '', path = s, hash, qi, out, params, json;
+    qi = s.indexOf('?');
+    if (qi !== -1) {
+      path = s.substring(0, qi);
+      q = s.substring(qi + 1);
+      hash = q.indexOf('#');
+      if (hash !== -1) q = q.substring(0, hash);
+    } else if (s.indexOf('#') !== -1) {
+      path = s.substring(0, s.indexOf('#'));
+    }
+    params = parseQueryString(q);
+    if (params.osjson) {
+      json = tryParseJSON(params.osjson);
+      if (json) {
+        out = parseFilamentObject(json, 'openspool-json');
+        out.raw = s;
+        return out;
+      }
+    }
+    if (params.qrstring) {
+      out = parseBarcodePayload(params.qrstring);
+      out.raw = s;
+      if (!hasParsedFields(out) ) out.kind = out.kind || 'url';
+      return out;
+    }
+    out = parseFilamentObject(params, 'url');
+    out.raw = s;
+    /* If the path itself is JSON we already handled that earlier. */
+    return out;
+  }
+
+  function parseKeyValues(s) {
+    var text = trim(s);
+    if (!text || text.indexOf('=') === -1 && text.indexOf(':') === -1) return null;
+    if (/^https?:\/\//i.test(text)) return null;
+    var parts, i, piece, eq, key, val, obj = {}, count = 0;
+    if (text.indexOf('\n') !== -1) parts = text.split(/\n+/);
+    else if (text.indexOf(';') !== -1) parts = text.split(';');
+    else if (text.indexOf('&') !== -1) parts = text.split('&');
+    else if (text.indexOf(',') !== -1 && /[A-Za-z][A-Za-z0-9_]*\s*[=:]/.test(text)) parts = text.split(',');
+    else parts = [text];
+    for (i = 0; i < parts.length; i++) {
+      piece = trim(parts[i]);
+      if (!piece) continue;
+      eq = piece.indexOf('=');
+      if (eq === -1) eq = piece.indexOf(':');
+      if (eq < 1) continue;
+      key = trim(piece.substring(0, eq));
+      val = trim(piece.substring(eq + 1));
+      if (!/^[A-Za-z][A-Za-z0-9_\-]*$/.test(key)) continue;
+      obj[key] = val;
+      count += 1;
+    }
+    if (count < 1) return null;
+    /* A lone unknown key=value is not enough to treat as a filament payload. */
+    var out = parseFilamentObject(obj, 'key-value');
+    out.raw = s;
+    if (!hasParsedFields(out)) return null;
+    return out;
+  }
+
+  function parseBarcodePayload(text) {
+    var raw = String(text == null ? '' : text);
+    var out = emptyParsed();
+    out.raw = raw;
+    var s = trim(raw);
+    if (!s) return out;
+    var pipe = parseOpenSpoolPipe(s);
+    if (pipe) { pipe.raw = raw; return pipe; }
+    var json = tryParseJSON(s);
+    if (json && typeof json === 'object' && Object.prototype.toString.call(json) !== '[object Array]') {
+      out = parseFilamentObject(json);
+      out.raw = raw;
+      if (hasParsedFields(out) || out.kind === 'openspool-json' || out.kind === 'openprinttag-json') return out;
+    }
+    if (/^https?:\/\//i.test(s) || /^[a-z][a-z0-9+.-]*:\/\//i.test(s)) {
+      out = parseFilamentUrl(s);
+      out.raw = raw;
+      if (hasParsedFields(out)) return out;
+    }
+    var kv = parseKeyValues(s);
+    if (kv) { kv.raw = raw; return kv; }
+    out = emptyParsed();
+    out.raw = raw;
+    out.kind = 'raw';
+    return out;
+  }
+
+  function isStickyDefault(item, key) {
+    if (key === 'brand' && item.brand === 'Generic') return true;
+    if (key === 'material' && item.material === 'PLA') return true;
+    if (key === 'finish' && item.finish === 'basic') return true;
+    if (key === 'diameter_mm' && String(item.diameter_mm) === '1.75') return true;
+    if (key === 'spool_capacity_g' && String(item.spool_capacity_g) === String(state.settings.defaultCapacity || 1000)) return true;
+    return false;
+  }
+
+  function applyParsedFields(item, parsed, overwrite) {
+    if (!item || !parsed) return item;
+    var f = parsed.fields || {};
+    var keys = ['material', 'brand', 'product_line', 'color_name', 'color_hex', 'finish', 'diameter_mm', 'spool_capacity_g', 'grams_remaining'];
+    var i, k;
+    for (i = 0; i < keys.length; i++) {
+      k = keys[i];
+      if (!trim(f[k])) continue;
+      if (overwrite || !trim(item[k]) || isStickyDefault(item, k)) {
+        item[k] = f[k];
+      }
+    }
+    item.barcode = parsed.raw;
+    if (parsed.notesBits && parsed.notesBits.length) {
+      var extra = parsed.notesBits.join('; ');
+      if (!trim(item.notes)) item.notes = extra;
+      else if (item.notes.indexOf(extra) === -1) item.notes = item.notes + ' \u00b7 ' + extra;
+    }
+    return item;
+  }
+
+  function isBlankNewItem(it) {
+    if (!it || isYes(it.seeded)) return false;
+    return !it.color_name && !it.color_hex && !it.notes && !trim(it.barcode) &&
+      it.spools_sealed === '' && it.spools_opened === '' && !it.product_line && !trim(it.location);
+  }
+
+  function discardBlankNewIfNeeded(exceptId) {
+    if (!editingId || editingId === exceptId) return;
+    var it = findItem(editingId);
+    if (it && isBlankNewItem(it)) {
+      var idx = findItemIndex(editingId);
+      if (idx !== -1) {
+        state.items.splice(idx, 1);
+        saveItems();
+      }
+    }
+  }
+
   function dateStamp() {
     var d = new Date();
     function z(n) { return (n < 10 ? '0' : '') + n; }
@@ -1534,6 +2031,9 @@
         html += '<option value="' + esc(m) + '"' + (m === selected ? ' selected' : '') + '>' + esc(m) + '</option>';
       }
     }
+    if (selected && !seen[selected]) {
+      html += '<option value="' + esc(selected) + '" selected>' + esc(selected) + '</option>';
+    }
     return html;
   }
   function uniqueMaterials() {
@@ -1561,7 +2061,7 @@
       if (q) {
         blob = [
           it.material, it.brand, it.product_line, it.color_name, it.color_hex,
-          it.finish, it.location, it.notes, it.presets_k1c, it.presets_k2
+          it.finish, it.location, it.notes, it.presets_k1c, it.presets_k2, it.barcode
         ].join(' ').toLowerCase();
         if (blob.indexOf(q) === -1) continue;
       }
@@ -1762,6 +2262,10 @@
     h += '<div class="field"><label for="f-material">Material</label><select id="f-material" name="material">' + materialOptions(item.material) + '</select></div>';
     h += fieldHTML('brand', 'Brand', item.brand);
     h += fieldHTML('product_line', 'Product line', item.product_line, 'placeholder="CR-PLA, Hyper PLA\u2026"');
+    h += '<div class="field full"><span class="lbl">Barcode</span><div class="color-row">';
+    h += '<input type="text" id="f-barcode" name="barcode" value="' + esc(item.barcode || '') + '" placeholder="QR, Data Matrix, UPC, EAN, Code 128" spellcheck="false" autocomplete="off">';
+    h += '<button type="button" class="btn" id="btn-edit-scan">Scan</button>';
+    h += '</div><p class="hint" style="margin:8px 0 0">If this code is already in the inventory, that entry opens instead.</p></div>';
     h += '<div class="field"><label for="f-finish">Finish</label><select id="f-finish" name="finish">';
     var i;
     for (i = 0; i < FINISHES.length; i++) {
@@ -1823,6 +2327,10 @@
         });
       });
     }
+    var scanBtn = document.getElementById('btn-edit-scan');
+    if (scanBtn) {
+      scanBtn.addEventListener('click', function () { openScanPanel('edit'); });
+    }
   }
   function readEditForm() {
     function val(id) {
@@ -1852,6 +2360,7 @@
     it.notes = val('f-notes');
     it.presets_k1c = document.getElementById('f-presets_k1c').checked ? 'yes' : '';
     it.presets_k2 = document.getElementById('f-presets_k2').checked ? 'yes' : '';
+    it.barcode = trim(val('f-barcode'));
     return it;
   }
   function saveEdit() {
@@ -2042,6 +2551,436 @@
     if (cb) cb(result);
   }
 
+
+  var scanActive = false;
+  var scanStream = null;
+  var scanTimer = null;
+  var scanAudioCtx = null;
+  var scanSource = 'list';
+  var scanCanvas = null;
+
+  function prepareScanAudio() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!scanAudioCtx) scanAudioCtx = new Ctx();
+      if (scanAudioCtx.state === 'suspended' && scanAudioCtx.resume) scanAudioCtx.resume();
+    } catch (e) {}
+  }
+
+  function scanFeedback() {
+    try {
+      if (navigator.vibrate) navigator.vibrate(80);
+    } catch (e1) {}
+    try {
+      if (!scanAudioCtx) return;
+      var ctx = scanAudioCtx;
+      if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.16);
+    } catch (e2) {}
+  }
+
+  function zxingHints() {
+    var Z = window.ZXing;
+    var hints = new Map();
+    var formats = [
+      Z.BarcodeFormat.QR_CODE,
+      Z.BarcodeFormat.DATA_MATRIX,
+      Z.BarcodeFormat.AZTEC,
+      Z.BarcodeFormat.PDF_417,
+      Z.BarcodeFormat.UPC_A,
+      Z.BarcodeFormat.UPC_E,
+      Z.BarcodeFormat.EAN_8,
+      Z.BarcodeFormat.EAN_13,
+      Z.BarcodeFormat.CODE_128,
+      Z.BarcodeFormat.CODE_39,
+      Z.BarcodeFormat.CODE_93,
+      Z.BarcodeFormat.ITF,
+      Z.BarcodeFormat.CODABAR
+    ];
+    if (Z.BarcodeFormat.RSS_14) formats.push(Z.BarcodeFormat.RSS_14);
+    if (Z.BarcodeFormat.RSS_EXPANDED) formats.push(Z.BarcodeFormat.RSS_EXPANDED);
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(Z.DecodeHintType.TRY_HARDER, true);
+    if (Z.DecodeHintType.ALSO_INVERTED != null) {
+      hints.set(Z.DecodeHintType.ALSO_INVERTED, true);
+    }
+    return hints;
+  }
+
+  function resultFromZxing(result) {
+    if (!result) return null;
+    var text = '';
+    var format = '';
+    try { text = result.getText ? result.getText() : String(result.text || ''); } catch (e) { text = String(result.text || ''); }
+    try { format = result.getBarcodeFormat ? String(result.getBarcodeFormat()) : String(result.format || ''); } catch (e2) {}
+    if (!trim(text)) return null;
+    return { text: text, format: format };
+  }
+
+  function decodeFromCanvas(canvas) {
+    var Z = window.ZXing;
+    if (!Z || !canvas || !canvas.width || !canvas.height) return null;
+    var hints, reader, source, bitmap, result, inverted;
+    hints = zxingHints();
+    function attempt(src, binarizer) {
+      reader = new Z.MultiFormatReader();
+      reader.setHints(hints);
+      bitmap = new Z.BinaryBitmap(new binarizer(src));
+      try {
+        result = reader.decode(bitmap);
+      } catch (e) {
+        result = null;
+      }
+      try { if (reader.reset) reader.reset(); } catch (e2) {}
+      return resultFromZxing(result);
+    }
+    try {
+      source = new Z.HTMLCanvasElementLuminanceSource(canvas);
+    } catch (e3) {
+      return decodeFromImageData(canvas);
+    }
+    result = attempt(source, Z.HybridBinarizer);
+    if (result) return result;
+    if (Z.GlobalHistogramBinarizer) {
+      result = attempt(source, Z.GlobalHistogramBinarizer);
+      if (result) return result;
+    }
+    if (source.invert) {
+      try {
+        inverted = source.invert();
+        result = attempt(inverted, Z.HybridBinarizer);
+        if (result) return result;
+      } catch (e4) {}
+    }
+    return null;
+  }
+
+  function decodeFromImageData(canvas) {
+    var Z = window.ZXing;
+    if (!Z || !Z.RGBLuminanceSource) return null;
+    var ctx, data, pixels, length, luminance, i, j, source, reader, hints, bitmap, result;
+    try {
+      ctx = canvas.getContext('2d');
+      data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } catch (e) { return null; }
+    pixels = data.data;
+    length = canvas.width * canvas.height;
+    luminance = new Uint8ClampedArray(length);
+    for (i = 0, j = 0; i < length; i++, j += 4) {
+      luminance[i] = (pixels[j] * 299 + pixels[j + 1] * 587 + pixels[j + 2] * 114) / 1000;
+    }
+    hints = zxingHints();
+    try {
+      source = new Z.RGBLuminanceSource(luminance, canvas.width, canvas.height);
+      reader = new Z.MultiFormatReader();
+      reader.setHints(hints);
+      bitmap = new Z.BinaryBitmap(new Z.HybridBinarizer(source));
+      result = resultFromZxing(reader.decode(bitmap));
+      if (reader.reset) reader.reset();
+      return result;
+    } catch (e2) {
+      return null;
+    }
+  }
+
+  function setScanStatus(msg, cls) {
+    var el = document.getElementById('scan-status');
+    if (!el) return;
+    el.className = 'scan-status' + (cls ? ' ' + cls : '');
+    el.textContent = msg;
+  }
+
+  function stopScanStream() {
+    scanActive = false;
+    if (scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
+    }
+    if (scanStream) {
+      var tracks = scanStream.getTracks();
+      var i;
+      for (i = 0; i < tracks.length; i++) {
+        try { tracks[i].stop(); } catch (e) {}
+      }
+      scanStream = null;
+    }
+    var video = document.getElementById('scan-video');
+    if (video) {
+      try { video.pause(); } catch (e2) {}
+      video.srcObject = null;
+    }
+  }
+
+  function closeScanPanel() {
+    stopScanStream();
+    closePanel('panel-scan');
+  }
+
+  function renderScanBody(opts) {
+    opts = opts || {};
+    var h = '';
+    if (!opts.manualOnly) {
+      h += '<p class="hint">Point the rear camera at a QR, Data Matrix, UPC, EAN, or Code 128 on the reel. Hold steady; the app reads continuously.</p>';
+      h += '<div class="scan-stage">';
+      h += '<video id="scan-video" autoplay muted playsinline webkit-playsinline></video>';
+      h += '<div class="scan-frame" aria-hidden="true"></div>';
+      h += '</div>';
+    }
+    h += '<p class="scan-status' + (opts.statusClass ? ' ' + opts.statusClass : '') + '" id="scan-status">' + esc(opts.status || 'Starting camera\u2026') + '</p>';
+    h += '<div id="scan-result-box"></div>';
+    h += '<div class="scan-actions">';
+    if (!opts.manualOnly) {
+      h += '<button type="button" class="btn" id="btn-scan-photo">Use a photo</button>';
+    }
+    h += '<button type="button" class="btn" id="btn-scan-manual-toggle">Enter code manually</button>';
+    h += '</div>';
+    h += '<div class="scan-manual" id="scan-manual" style="display:none">';
+    h += '<div class="field full"><label for="scan-manual-input">Barcode or QR text</label>';
+    h += '<input type="text" id="scan-manual-input" placeholder="Type or paste the code" spellcheck="false" autocomplete="off">';
+    h += '</div>';
+    h += '<button type="button" class="btn btn-primary" id="btn-scan-manual-use">Use code</button>';
+    h += '</div>';
+    document.getElementById('scan-body').innerHTML = h;
+    var photo = document.getElementById('btn-scan-photo');
+    if (photo) {
+      photo.addEventListener('click', function () {
+        var input = document.getElementById('file-scan');
+        input.value = '';
+        input.click();
+      });
+    }
+    document.getElementById('btn-scan-manual-toggle').addEventListener('click', function () {
+      var box = document.getElementById('scan-manual');
+      box.style.display = box.style.display === 'none' ? '' : 'none';
+      if (box.style.display !== 'none') {
+        document.getElementById('scan-manual-input').focus();
+      }
+    });
+    document.getElementById('btn-scan-manual-use').addEventListener('click', function () {
+      var v = trim(document.getElementById('scan-manual-input').value);
+      if (!v) {
+        setScanStatus('Type a code first.', 'err');
+        return;
+      }
+      applyScannedCode(v, 'manual');
+    });
+    if (opts.showManual) {
+      document.getElementById('scan-manual').style.display = '';
+    }
+  }
+
+  function openScanPanel(source) {
+    scanSource = source || 'list';
+    prepareScanAudio();
+    renderScanBody({ status: 'Starting camera\u2026' });
+    openPanel('panel-scan');
+    startScanCamera();
+  }
+
+  function startScanCamera() {
+    if (!window.ZXing) {
+      renderScanBody({
+        manualOnly: true,
+        showManual: true,
+        status: 'The barcode library did not load. Enter the code manually.',
+        statusClass: 'err'
+      });
+      return;
+    }
+    var media = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+    if (!media) {
+      renderScanBody({
+        manualOnly: true,
+        showManual: true,
+        status: 'This browser cannot open a live camera. Enter the code manually, or use a photo.',
+        statusClass: 'err'
+      });
+      /* Still offer the photo button: re-render with a photo option even in manual-only? */
+      var actions = document.querySelector('.scan-actions');
+      if (actions && !document.getElementById('btn-scan-photo')) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn';
+        b.id = 'btn-scan-photo';
+        b.textContent = 'Use a photo';
+        actions.insertBefore(b, actions.firstChild);
+        b.addEventListener('click', function () {
+          var input = document.getElementById('file-scan');
+          input.value = '';
+          input.click();
+        });
+      }
+      return;
+    }
+    var constraints = { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+    navigator.mediaDevices.getUserMedia(constraints).then(onScanStream).catch(function () {
+      return navigator.mediaDevices.getUserMedia({ audio: false, video: true }).then(onScanStream);
+    }).catch(function (err) {
+      var name = err && err.name ? String(err.name) : '';
+      var msg = 'The camera could not be opened.';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        msg = 'Camera permission was denied. Enter the code manually, or use a photo.';
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        msg = 'No camera was found. Enter the code manually, or use a photo.';
+      }
+      renderScanBody({ showManual: true, status: msg, statusClass: 'err' });
+    });
+  }
+
+  function onScanStream(stream) {
+    scanStream = stream;
+    scanActive = true;
+    var video = document.getElementById('scan-video');
+    if (!video) {
+      stopScanStream();
+      return;
+    }
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.muted = true;
+    video.autoplay = true;
+    video.srcObject = stream;
+    var play = video.play();
+    if (play && play.catch) play.catch(function () {});
+    setScanStatus('Point the camera at a barcode\u2026');
+    if (!scanCanvas) scanCanvas = document.createElement('canvas');
+    if (scanTimer) clearTimeout(scanTimer);
+    scanTimer = setTimeout(scanTick, 350);
+  }
+
+  function drawVideoToScanCanvas(video) {
+    var w = video.videoWidth || 0;
+    var h = video.videoHeight || 0;
+    if (!w || !h) return null;
+    var canvas = scanCanvas;
+    /* Downscale large frames so older iPads stay responsive. */
+    var max = 960;
+    var scale = 1;
+    if (w > max || h > max) scale = max / Math.max(w, h);
+    var cw = Math.max(1, Math.round(w * scale));
+    var ch = Math.max(1, Math.round(h * scale));
+    if (canvas.width !== cw) canvas.width = cw;
+    if (canvas.height !== ch) canvas.height = ch;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, cw, ch);
+    return canvas;
+  }
+
+  function scanTick() {
+    if (!scanActive) return;
+    var video = document.getElementById('scan-video');
+    var canvas, result;
+    if (video && video.readyState >= 2) {
+      canvas = drawVideoToScanCanvas(video);
+      if (canvas) {
+        result = decodeFromCanvas(canvas);
+        if (result) {
+          applyScannedCode(result.text, result.format || 'camera');
+          return;
+        }
+      }
+    }
+    scanTimer = setTimeout(scanTick, 280);
+  }
+
+  function loadScanPhoto(file) {
+    if (!file) return;
+    if (!window.ZXing) {
+      setScanStatus('The barcode library did not load.', 'err');
+      return;
+    }
+    setScanStatus('Reading photo\u2026');
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      var scaled = downscaleImageToCanvas(img, 1600);
+      URL.revokeObjectURL(url);
+      var result = decodeFromCanvas(scaled.canvas || scaled);
+      if (result) applyScannedCode(result.text, result.format || 'photo');
+      else setScanStatus('No barcode found in that photo. Try a closer, sharper picture, or enter the code manually.', 'err');
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      setScanStatus('Could not open that photo.', 'err');
+    };
+    img.src = url;
+  }
+
+  function showScanHit(text, format) {
+    var box = document.getElementById('scan-result-box');
+    if (!box) return;
+    box.innerHTML = '<div class="scan-result"><div><strong>Scanned' + (format && format !== 'manual' ? ' \u00b7 ' + esc(format) : '') + '</strong></div><div class="mono">' + esc(text) + '</div></div>';
+  }
+
+  function applyScannedCode(text, format) {
+    var raw = String(text == null ? '' : text);
+    if (!trim(raw)) return;
+    scanActive = false;
+    stopScanStream();
+    scanFeedback();
+    showScanHit(raw, format);
+    setScanStatus('Code read.', 'ok');
+    /* Brief pause so the result is visible, then apply. */
+    setTimeout(function () {
+      closeScanPanel();
+      handleScannedPayload(raw, format);
+    }, 350);
+  }
+
+
+  function handleScannedPayload(raw, format) {
+    var parsed = parseBarcodePayload(raw);
+    var existing = findItemByBarcode(raw);
+    var it, isNew, label;
+    if (existing) {
+      discardBlankNewIfNeeded(existing.id);
+      applyParsedFields(existing, parsed, false);
+      renderEdit(existing, false);
+      label = existing.color_name || existing.material || 'filament';
+      toast('Opened ' + label + ' \u2014 update the weight or count if needed.');
+      return;
+    }
+    if (document.getElementById('panel-edit').className.indexOf('is-open') !== -1 && editingId) {
+      it = findItem(editingId);
+      if (it) {
+        isNew = isBlankNewItem(it);
+        applyParsedFields(it, parsed, true);
+        renderEdit(it, isNew);
+        toast('Barcode added to this entry.');
+        return;
+      }
+    }
+    startNewFromScan(parsed);
+  }
+
+  function startNewFromScan(parsed) {
+    var it = blankItem();
+    it.material = rapidSticky.material || it.material;
+    it.brand = rapidSticky.brand || it.brand;
+    it.product_line = rapidSticky.product_line || it.product_line;
+    it.diameter_mm = rapidSticky.diameter_mm || it.diameter_mm;
+    it.finish = rapidSticky.finish || it.finish;
+    applyParsedFields(it, parsed, true);
+    state.items.unshift(it);
+    renderEdit(it, true);
+    var bits = [];
+    if (it.material) bits.push(it.material);
+    if (it.brand && it.brand !== 'Generic') bits.push(it.brand);
+    if (it.color_name) bits.push(it.color_name);
+    toast('New entry from barcode' + (bits.length ? ' \u00b7 ' + bits.join(' \u00b7 ') : '') + '.');
+  }
+
   function renderRapid() {
     var st = rapidSticky;
     var h = '';
@@ -2133,7 +3072,7 @@
       grams_remaining: '',
       spool_capacity_g: cap,
       location: '', date_opened: '', date_dried: '', notes: '',
-      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: ''
+      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: ''
     };
     var w = parseNum(weight);
     var c = parseNum(cap) || 1000;
@@ -2420,7 +3359,7 @@
       spools_sealed: '', spools_opened: '', grams_remaining: '',
       spool_capacity_g: String(state.settings.defaultCapacity || 1000),
       location: '', date_opened: '', date_dried: '', notes: '',
-      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: ''
+      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: ''
     };
   }
   function bind() {
@@ -2443,6 +3382,11 @@
         saveSettings();
         renderMain();
       }, 120);
+    });
+    document.getElementById('btn-scan').addEventListener('click', function () { openScanPanel('list'); });
+    document.getElementById('btn-scan-cancel').addEventListener('click', function () { closeScanPanel(); });
+    document.getElementById('file-scan').addEventListener('change', function () {
+      if (this.files && this.files[0]) loadScanPhoto(this.files[0]);
     });
     document.getElementById('btn-add').addEventListener('click', function () {
       var it = blankItem();
@@ -2493,7 +3437,7 @@
         var id = t.getAttribute('data-close');
         if (id === 'panel-edit') {
           var it = findItem(editingId);
-          if (it && !it.color_name && !it.color_hex && !it.notes && it.spools_sealed === '' && it.spools_opened === '' && !isYes(it.seeded) && !it.product_line && !trim(it.location)) {
+          if (it && isBlankNewItem(it)) {
             var idx = findItemIndex(editingId);
             if (idx !== -1) {
               state.items.splice(idx, 1);
@@ -2507,11 +3451,12 @@
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        var ids = ['panel-confirm', 'panel-camera', 'panel-csv', 'panel-settings', 'panel-rapid', 'panel-edit'];
+        var ids = ['panel-confirm', 'panel-scan', 'panel-camera', 'panel-csv', 'panel-settings', 'panel-rapid', 'panel-edit'];
         var i;
         for (i = 0; i < ids.length; i++) {
           if (document.getElementById(ids[i]).className.indexOf('is-open') !== -1) {
             if (ids[i] === 'panel-camera') finishCamera(false);
+            else if (ids[i] === 'panel-scan') closeScanPanel();
             else closePanel(ids[i]);
             return;
           }
@@ -2529,7 +3474,11 @@
       clipboard: !!(navigator.clipboard && navigator.clipboard.writeText),
       pointerEvents: 'PointerEvent' in window,
       canvas: !!(document.createElement('canvas').getContext),
-      matchMedia: typeof window.matchMedia === 'function'
+      matchMedia: typeof window.matchMedia === 'function',
+      barcodeDetector: 'BarcodeDetector' in window,
+      getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+      vibrate: typeof navigator.vibrate === 'function',
+      zxing: typeof window.ZXing !== 'undefined'
     };
   }
   function init() {
@@ -2563,7 +3512,18 @@
       PHOTO_MAX: PHOTO_MAX,
       PATCH: PATCH,
       openCameraUI: openCameraUI,
-      startCamera: startCamera
+      startCamera: startCamera,
+      parseBarcodePayload: parseBarcodePayload,
+      findItemByBarcode: findItemByBarcode,
+      applyParsedFields: applyParsedFields,
+      applyScannedCode: applyScannedCode,
+      handleScannedPayload: handleScannedPayload,
+      decodeFromCanvas: decodeFromCanvas,
+      openScanPanel: openScanPanel,
+      closeScanPanel: closeScanPanel,
+      startNewFromScan: startNewFromScan,
+      mapMaterial: mapMaterial,
+      getSticky: function () { return rapidSticky; }
     };
   }
   if (document.readyState === 'loading') {

@@ -1,5 +1,5 @@
 /* Filament Inventory service worker — simple cache for iPadOS 15 Safari */
-var CACHE = 'filament-inventory-v2';
+var CACHE = 'filament-inventory-v3';
 var ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,8 @@ var ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
-  './icons/favicon.png'
+  './icons/favicon.png',
+  './vendor/zxing.min.js'
 ];
 
 self.addEventListener('install', function (event) {

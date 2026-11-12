@@ -19,6 +19,7 @@ The first visit must be over HTTPS (GitHub Pages provides that). After it is on 
 - **List** and **Grid** views, filters by material, search, and **Sort: most on hand** (for “color doesn’t matter, use what I have plenty of”).
 - On each card: **+ / −** sealed spools, **Used a spool**, **Edit**.
 - **+ Add** for a single filament. **Add spools** is rapid entry: pick a material (it stays), then for each spool take a photo, tap the filament, enter grams (or 250 / 500 / 750 / 1000), **Save & next**. Undo is on the session list.
+- **Scan** (on the main list, and on Add / Edit next to the barcode field): opens the rear camera and continuously reads 1D and 2D codes (QR, Data Matrix, Aztec, PDF417, UPC, EAN, Code 128, Code 39, and similar). A short beep plays when a code is read (and vibration, if the iPad supports it). If the code already belongs to a spool, that entry opens so you can update the weight or count. Otherwise a new entry is started with the barcode filled in, using the last material / brand from rapid entry, and any brand, material, color, or hex the code itself contains. If the camera is denied, type the code or use a photo.
 - **Camera** (on Add, Edit, and Add spools): take or pick a photo, tap or drag a reticle, and the app averages a 15×15 pixel patch while dropping the brightest 10% (glare). An optional **white balance** step lets you tap a white or gray card first. Photos are downscaled to 1,200 px before sampling so older iPads stay stable. The hex is always editable; a nearby color name is suggested.
 - **Low stock** uses a configurable threshold (Settings). Entries with unknown counts are not treated as zero and are not flagged low.
 - Light and dark appearance (system, or force one in Settings).
@@ -30,7 +31,7 @@ Counts live only on the iPad. iPadOS may clear Home Screen app storage if the ap
 ### Stable CSV header
 
 ```
-id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_sealed,spools_opened,grams_remaining,spool_capacity_g,location,date_opened,date_dried,notes,presets_k1c,presets_k2,low_stock_threshold,seeded
+id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_sealed,spools_opened,grams_remaining,spool_capacity_g,location,date_opened,date_dried,notes,presets_k1c,presets_k2,low_stock_threshold,seeded,barcode
 ```
 
 - `spools_sealed`, `spools_opened`, and `grams_remaining`: **blank means unknown, not zero**.
@@ -39,11 +40,22 @@ id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_se
 - `diameter_mm` defaults to `1.75`; `spool_capacity_g` defaults to `1000`.
 - Dates are `YYYY-MM-DD`.
 - `seeded` is `yes` for entries that came from print history.
+- `barcode` is the raw text of a scanned or typed code. It is appended at the end so older CSVs without this column still import.
 - Import matches rows by `id` (updates existing, adds new).
 
 ## Seed list
 
 The starting list is every distinct material + color + brand found in print records (print log, queue, K2 CFS slot snapshots). Quantities are left blank with the note “from print history, please count.” No colors or brands were invented.
+
+
+## What a scan fills in
+
+The raw code is always stored on the entry. The app also fills fields when the payload clearly contains them — it never guesses missing brand, material, or color.
+
+- **OpenSpool JSON** (`"protocol":"openspool"`) and the compact `OS1.0|TYPE|COLOR_HEX|BRAND|MIN_TEMP|MAX_TEMP` QR form.
+- **OpenPrintTag-style JSON** and similar objects with `brand_name`, `material_type`, `material_name`, `primary_color`, or a nested `data.material` object (a JSON QR stand-in; official OpenPrintTag NFC tags are CBOR and are not barcodes).
+- Generic JSON, `key=value` text, or a URL with query parameters for brand, material, color, hex, diameter, or weight.
+- Retail **UPC / EAN / Code 128** values are stored as-is. There is no public barcode layout for Creality, Sunlu, or Elegoo spools that encodes color or material, and Creality CFS RFID is not a barcode.
 
 ## Privacy and hosting
 
@@ -55,11 +67,13 @@ No login, no tracking, no external CDNs. Your counts never go to GitHub. The pub
 - `navigator.share` with a file opens the iOS share sheet on iPadOS 15. If share is unavailable, the app falls back to a download link and a Copy CSV box.
 - Safari 15 auto-orients JPEGs when they are drawn from an `<img>` onto a canvas; sampling uses that path.
 - `input type=color` is present, with a hex text field as the fallback.
-- Service worker caching is simple (app shell only). Data is in `localStorage`, with a JSON backup key.
+- There is no `BarcodeDetector` API on iPadOS 15, so scanning uses a vendored copy of `@zxing/library` 0.23.0 (no CDN). Live camera access needs a tap, HTTPS, and the `playsinline` video attribute. `navigator.vibrate` is often unavailable on iPad; the success beep uses the Web Audio API. Creality CFS / Bambu factory spool chips are NFC/RFID, not barcodes, and are out of scope.
+- Service worker caching is simple (app shell only, including the decoder). Data is in `localStorage`, with a JSON backup key.
 
 ## Local files
 
 - `index.html` — the whole app (CSS and JS inline)
+- `vendor/zxing.min.js` — offline barcode decoder (`@zxing/library` 0.23.0)
 - `manifest.json`, `sw.js`
 - `icons/icon-192.png`, `icons/icon-512.png`, `icons/apple-touch-icon.png` (iOS 15 uses the apple-touch-icon, not the manifest icons, for the Home Screen)
 - `icons/favicon.png`
