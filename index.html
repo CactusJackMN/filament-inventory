@@ -731,6 +731,89 @@
       margin-top: 8px;
     }
     .weight-btns .btn { min-width: 72px; }
+    .weigh-box {
+      -webkit-flex: 1 1 100%;
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .weigh-row {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .weigh-readout { font-size: 15px; font-weight: 700; }
+    .weigh-date {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .weigh-editor {
+      margin-top: 8px;
+      padding: 10px;
+      background: var(--bg-sunken);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .weigh-editor label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .weigh-editor-row {
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+    }
+    .weigh-editor input {
+      -webkit-flex: 1 1 140px;
+      flex: 1 1 140px;
+      min-width: 140px;
+      min-height: 48px;
+      font-size: 22px;
+      font-weight: 700;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-elev);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .weigh-editor input:focus {
+      outline: 3px solid var(--accent);
+      outline-offset: 0;
+    }
+    .weigh-editor .btn { min-height: 48px; min-width: 72px; }
+    .grid-hit {
+      display: block;
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .grid-card .g-actions {
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
     .session-list { margin-top: 16px; }
     .session-item {
       display: -webkit-flex;
@@ -989,7 +1072,8 @@
     'id', 'material', 'brand', 'product_line', 'color_name', 'color_hex',
     'finish', 'diameter_mm', 'spools_sealed', 'spools_opened', 'grams_remaining',
     'spool_capacity_g', 'location', 'date_opened', 'date_dried', 'notes',
-    'presets_k1c', 'presets_k2', 'low_stock_threshold', 'seeded', 'barcode'
+    'presets_k1c', 'presets_k2', 'low_stock_threshold', 'seeded', 'barcode',
+    'date_weighed'
   ];
 
   var MATERIALS = ['PLA', 'PLA+', 'PLA-Silk', 'PETG', 'TPU', 'ABS', 'ASA', 'PET-CF', 'Other'];
@@ -1074,7 +1158,8 @@
         presets_k2: '',
         low_stock_threshold: '',
         seeded: 'yes',
-        barcode: ''
+        barcode: '',
+        date_weighed: ''
       }, o);
     }
     return [
@@ -1385,9 +1470,109 @@
     var parts = [];
     if (item.spools_sealed !== '' && item.spools_sealed != null) parts.push(item.spools_sealed + ' sealed');
     if (item.spools_opened !== '' && item.spools_opened != null) parts.push(item.spools_opened + ' opened');
-    var g = parseNum(item.grams_remaining);
-    if (g != null) parts.push(g + ' g left');
+    var w = weightPctLabel(item);
+    if (w) parts.push(w);
     return parts.join(' \u00b7 ') || (t + ' on hand');
+  }
+  var MAX_WEIGHT_G = 3000;
+  var weighingId = null;
+  function todayISO() {
+    var d = new Date();
+    function z(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+  }
+  function formatGrams(g) {
+    if (g == null) return '';
+    var r = Math.round(g * 10) / 10;
+    if (r === Math.round(r)) return String(Math.round(r));
+    return String(r);
+  }
+  function weightPctLabel(item) {
+    var g = parseNum(item.grams_remaining);
+    if (g == null) return '';
+    var cap = parseNum(item.spool_capacity_g);
+    var s = formatGrams(g) + ' g';
+    if (cap != null && cap > 0) s += ' (' + Math.round((g / cap) * 100) + '%)';
+    return s;
+  }
+  function parseWeightInput(v) {
+    var s = trim(v);
+    if (s === '') return {ok: true, value: '', grams: null};
+    s = s.replace(/\s+/g, '').replace(/g$/i, '').replace(/,/g, '');
+    if (!/^\+?\d+(\.\d+)?$/.test(s)) {
+      return {ok: false, error: 'Enter the net grams from the scale, or leave blank.'};
+    }
+    var n = Number(s);
+    if (isNaN(n) || n < 0) return {ok: false, error: 'Weight must be zero or more.'};
+    if (n > MAX_WEIGHT_G) return {ok: false, error: 'Weight looks too high (max 3000 g).'};
+    return {ok: true, value: formatGrams(n), grams: n};
+  }
+  function applyWeightValue(item, raw) {
+    var r = parseWeightInput(raw);
+    if (!r.ok) return r;
+    item.grams_remaining = r.value;
+    item.date_weighed = r.grams == null ? '' : todayISO();
+    return r;
+  }
+  function weighBoxHTML(item) {
+    var w = weightPctLabel(item);
+    var h = '<div class="weigh-box">';
+    h += '<div class="weigh-row">';
+    h += '<button type="button" class="btn" data-weigh="' + esc(item.id) + '">Weigh</button>';
+    if (w) {
+      h += '<span class="weigh-readout">' + esc(w) + '</span>';
+      if (item.date_weighed) h += '<span class="weigh-date">weighed ' + esc(item.date_weighed) + '</span>';
+    } else {
+      h += '<span class="weigh-readout qty-unknown">weight unknown</span>';
+    }
+    h += '</div>';
+    if (weighingId === item.id) {
+      h += '<div class="weigh-editor">';
+      h += '<label for="weigh-input">Current weight (g, spool tared)</label>';
+      h += '<div class="weigh-editor-row">';
+      h += '<input type="text" id="weigh-input" inputmode="decimal" enterkeyhint="done" placeholder="grams" value="' + esc(item.grams_remaining || '') + '" aria-label="Current weight (g, spool tared)">';
+      h += '<button type="button" class="btn btn-primary" data-weigh-save="' + esc(item.id) + '">Save</button>';
+      h += '<button type="button" class="btn" data-weigh-cancel="' + esc(item.id) + '">Cancel</button>';
+      h += '</div></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+  function bindWeighInput() {
+    var wi = document.getElementById('weigh-input');
+    if (!wi) return;
+    wi.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveWeighFromCard(weighingId);
+      }
+    });
+    setTimeout(function () {
+      var el = document.getElementById('weigh-input');
+      if (el) {
+        el.focus();
+        if (el.select) el.select();
+      }
+    }, 30);
+  }
+  function openWeigh(id) {
+    weighingId = (weighingId === id) ? null : id;
+    renderMain();
+  }
+  function saveWeighFromCard(id) {
+    var it = findItem(id);
+    var input = document.getElementById('weigh-input');
+    if (!it || !input) return;
+    var r = applyWeightValue(it, input.value);
+    if (!r.ok) {
+      toast(r.error);
+      input.focus();
+      return;
+    }
+    saveItems();
+    weighingId = null;
+    renderMain();
+    toast(r.grams == null ? 'Weight cleared' : ('Weighed ' + formatGrams(r.grams) + ' g'));
   }
 
   var state = {
@@ -1410,6 +1595,7 @@
     for (i = 0; i < state.items.length; i++) {
       it = state.items[i];
       if (it && it.barcode == null) it.barcode = '';
+      if (it && it.date_weighed == null) it.date_weighed = '';
     }
   }
   function loadSettings() {
@@ -2132,13 +2318,17 @@
         it = items[i];
         low = isLow(it, s.lowStockThreshold);
         title = it.color_name || it.color_hex || '(no color)';
-        html += '<button type="button" class="grid-card' + (low ? ' is-low' : '') + '" data-open="' + esc(it.id) + '">';
+        html += '<article class="grid-card' + (low ? ' is-low' : '') + '" data-id="' + esc(it.id) + '">';
+        html += '<button type="button" class="grid-hit" data-open="' + esc(it.id) + '">';
         html += swatchHTML(it.color_hex);
         html += '<div class="g-body"><h3>' + esc(title) + '</h3>';
         html += '<div class="g-mat">' + esc(it.material) + (it.brand ? ' \u00b7 ' + esc(it.brand) : '') + (it.product_line ? ' \u00b7 ' + esc(it.product_line) : '') + '</div>';
         html += '<div class="g-qty' + (totalSpools(it) == null ? ' qty-unknown' : '') + '">' + esc(qtyLabel(it)) + '</div>';
         if (low) html += '<span class="badge badge-low">Low</span>';
         html += '</div></button>';
+        html += '<div class="g-body" style="padding-top:0">';
+        html += weighBoxHTML(it);
+        html += '</div></article>';
       }
       html += '</div>';
     } else {
@@ -2180,10 +2370,13 @@
         html += '<div class="meta" style="min-width:90px">' + (it.spools_opened === '' || it.spools_opened == null ? '<span class="qty-unknown">opened \u2014</span>' : '<strong>' + esc(String(it.spools_opened)) + '</strong> opened') + '</div>';
         html += '<button type="button" class="btn" data-used="' + esc(it.id) + '">Used a spool</button>';
         html += '<button type="button" class="btn btn-primary" data-open="' + esc(it.id) + '">Edit</button>';
-        html += '</div></div></article>';
+        html += '</div>';
+        html += weighBoxHTML(it);
+        html += '</div></article>';
       }
     }
     main.innerHTML = html;
+    bindWeighInput();
   }
   function renderAll() {
     applyTheme();
@@ -2223,6 +2416,7 @@
     if (opened != null && opened > 0) {
       it.spools_opened = String(opened - 1);
       it.grams_remaining = '';
+      it.date_weighed = '';
       saveItems();
       renderMain();
       toast('Marked one opened spool as used');
@@ -2231,6 +2425,7 @@
     if (sealed != null && sealed > 0) {
       it.spools_sealed = String(sealed - 1);
       it.grams_remaining = '';
+      it.date_weighed = '';
       saveItems();
       renderMain();
       toast('Marked one sealed spool as used');
@@ -2254,7 +2449,7 @@
     return '<div class="field"><label for="f-' + name + '">' + esc(label) + '</label>' +
       '<input id="f-' + name + '" name="' + name + '" type="text" value="' + esc(value == null ? '' : value) + '" ' + attrs + '></div>';
   }
-  function renderEdit(item, isNew) {
+  function renderEdit(item, isNew, opts) {
     editingId = item.id;
     document.getElementById('edit-title').textContent = isNew ? 'Add filament' : (item.color_name || item.material || 'Filament');
     document.getElementById('btn-delete-edit').style.display = isNew ? 'none' : '';
@@ -2281,11 +2476,14 @@
     h += fieldHTML('diameter_mm', 'Diameter (mm)', item.diameter_mm || '1.75', 'inputmode="decimal"');
     h += fieldHTML('spools_sealed', 'Spools sealed', item.spools_sealed, 'inputmode="numeric" placeholder="unknown"');
     h += fieldHTML('spools_opened', 'Spools opened', item.spools_opened, 'inputmode="numeric" placeholder="unknown"');
-    h += fieldHTML('grams_remaining', 'Grams remaining (opened)', item.grams_remaining, 'inputmode="decimal" placeholder="unknown"');
+    h += '<div class="field"><label for="f-grams_remaining">Current weight (g, spool tared)</label>';
+    h += '<input id="f-grams_remaining" name="grams_remaining" type="text" value="' + esc(item.grams_remaining == null ? '' : item.grams_remaining) + '" inputmode="decimal" placeholder="unknown" enterkeyhint="done">';
+    h += '<p class="hint" style="margin:8px 0 0">Net filament only — tare an empty spool on the scale first.</p></div>';
     h += fieldHTML('spool_capacity_g', 'Spool capacity (g)', item.spool_capacity_g || '1000', 'inputmode="numeric"');
     h += fieldHTML('location', 'Storage location', item.location);
     h += '<div class="field"><label for="f-date_opened">Date opened</label><input type="date" id="f-date_opened" name="date_opened" value="' + esc(item.date_opened || '') + '"></div>';
     h += '<div class="field"><label for="f-date_dried">Date dried</label><input type="date" id="f-date_dried" name="date_dried" value="' + esc(item.date_dried || '') + '"></div>';
+    h += '<div class="field"><label for="f-date_weighed">Date weighed</label><input type="date" id="f-date_weighed" name="date_weighed" value="' + esc(item.date_weighed || '') + '"></div>';
     h += fieldHTML('low_stock_threshold', 'Low-stock threshold (spools)', item.low_stock_threshold, 'inputmode="numeric" placeholder="use default (' + state.settings.lowStockThreshold + ')"');
     h += '<div class="field full"><label for="f-notes">Notes</label><textarea id="f-notes" name="notes">' + esc(item.notes) + '</textarea></div>';
     h += '<div class="field full"><span class="lbl">Printer presets that suit it</span><div class="checks">';
@@ -2295,6 +2493,16 @@
     document.getElementById('edit-body').innerHTML = h;
     openPanel('panel-edit');
     wireEditColor();
+    if (opts && opts.focusWeight) {
+      setTimeout(function () {
+        var el = document.getElementById('f-grams_remaining');
+        if (el) {
+          el.focus();
+          if (el.select) el.select();
+          if (el.scrollIntoView) el.scrollIntoView(true);
+        }
+      }, 80);
+    }
   }
   function wireEditColor() {
     var picker = document.getElementById('f-colorpicker');
@@ -2356,6 +2564,7 @@
     it.location = val('f-location');
     it.date_opened = val('f-date_opened');
     it.date_dried = val('f-date_dried');
+    it.date_weighed = val('f-date_weighed');
     it.low_stock_threshold = trim(val('f-low_stock_threshold'));
     it.notes = val('f-notes');
     it.presets_k1c = document.getElementById('f-presets_k1c').checked ? 'yes' : '';
@@ -2364,7 +2573,26 @@
     return it;
   }
   function saveEdit() {
-    readEditForm();
+    var prev = findItem(editingId);
+    var prevG = prev ? String(prev.grams_remaining || '') : '';
+    var prevD = prev ? String(prev.date_weighed || '') : '';
+    var gramsEl = document.getElementById('f-grams_remaining');
+    var parsed = parseWeightInput(gramsEl ? gramsEl.value : '');
+    if (!parsed.ok) {
+      toast(parsed.error);
+      if (gramsEl) gramsEl.focus();
+      return;
+    }
+    var it = readEditForm();
+    it.grams_remaining = parsed.value;
+    var typedDate = trim(it.date_weighed || '');
+    if (parsed.grams == null) {
+      it.date_weighed = '';
+    } else if (typedDate && (parsed.value === prevG || typedDate !== prevD)) {
+      it.date_weighed = typedDate;
+    } else {
+      it.date_weighed = todayISO();
+    }
     saveItems();
     closePanel('panel-edit');
     renderAll();
@@ -2946,7 +3174,7 @@
     if (existing) {
       discardBlankNewIfNeeded(existing.id);
       applyParsedFields(existing, parsed, false);
-      renderEdit(existing, false);
+      renderEdit(existing, false, {focusWeight: true});
       label = existing.color_name || existing.material || 'filament';
       toast('Opened ' + label + ' \u2014 update the weight or count if needed.');
       return;
@@ -2984,7 +3212,7 @@
   function renderRapid() {
     var st = rapidSticky;
     var h = '';
-    h += '<div class="sticky-bar"><p class="hint" style="margin:0 0 8px">Material (and brand / diameter) stay selected. Each new spool: camera, tap color, enter weight, then Save &amp; next.</p>';
+    h += '<div class="sticky-bar"><p class="hint" style="margin:0 0 8px">Material (and brand / diameter) stay selected. Each new spool: camera, tap color, type the current net weight (or a shortcut), then Save &amp; next.</p>';
     h += '<div class="form-grid">';
     h += '<div class="field"><label for="r-material">Material</label><select id="r-material">' + materialOptions(st.material) + '</select></div>';
     h += '<div class="field"><label for="r-brand">Brand</label><input type="text" id="r-brand" value="' + esc(st.brand) + '"></div>';
@@ -3003,8 +3231,9 @@
     h += '<input type="text" id="r-name" placeholder="Color name">';
     h += '<button type="button" class="btn btn-primary" id="r-camera">Camera</button>';
     h += '</div></div>';
-    h += '<div class="field"><label for="r-weight">Approx weight (grams)</label>';
-    h += '<input type="text" id="r-weight" inputmode="numeric" pattern="[0-9]*" placeholder="grams">';
+    h += '<div class="field"><label for="r-weight">Current weight (g, spool tared)</label>';
+    h += '<input type="text" id="r-weight" inputmode="decimal" enterkeyhint="done" placeholder="exact grams">';
+    h += '<p class="hint" style="margin:8px 0 0">Net filament only — tare an empty spool on the scale first. The buttons below are shortcuts.</p>';
     h += '<div class="weight-btns">';
     for (i = 0; i < WEIGHT_QUICK.length; i++) {
       h += '<button type="button" class="btn" data-w="' + WEIGHT_QUICK[i] + '">' + WEIGHT_QUICK[i] + ' g</button>';
@@ -3072,20 +3301,27 @@
       grams_remaining: '',
       spool_capacity_g: cap,
       location: '', date_opened: '', date_dried: '', notes: '',
-      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: ''
+      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: '',
+      date_weighed: ''
     };
-    var w = parseNum(weight);
+    var parsedW = parseWeightInput(weight);
+    if (!parsedW.ok) {
+      toast(parsedW.error);
+      document.getElementById('r-weight').focus();
+      return;
+    }
+    var w = parsedW.grams;
     var c = parseNum(cap) || 1000;
     if (w != null) {
+      item.grams_remaining = parsedW.value;
+      item.date_weighed = todayISO();
       if (w >= c) {
         item.spools_sealed = '1';
         item.spools_opened = '0';
-        item.grams_remaining = '';
       } else {
         item.spools_sealed = '0';
         item.spools_opened = '1';
-        item.grams_remaining = String(w);
-        item.date_opened = new Date().toISOString().substring(0, 10);
+        item.date_opened = todayISO();
       }
     }
     state.items.unshift(item);
@@ -3152,7 +3388,7 @@
     h += '<button type="button" class="btn" id="csv-import">Import CSV</button></div>';
     h += '<div class="help-block"><h3>CSV header (stable)</h3>';
     h += '<p class="mono">' + esc(CSV_HEADERS.join(',')) + '</p>';
-    h += '<p>Blank <span class="mono">spools_sealed</span>, <span class="mono">spools_opened</span>, and <span class="mono">grams_remaining</span> mean unknown, not zero. <span class="mono">presets_k1c</span> and <span class="mono">presets_k2</span> are \u201cyes\u201d when that printer\u2019s presets suit the filament. Dates are YYYY-MM-DD.</p></div>';
+    h += '<p>Blank <span class="mono">spools_sealed</span>, <span class="mono">spools_opened</span>, and <span class="mono">grams_remaining</span> mean unknown, not zero. <span class="mono">grams_remaining</span> is the net filament weight after taring an empty spool. <span class="mono">date_weighed</span> is when that weight was entered (YYYY-MM-DD). <span class="mono">presets_k1c</span> and <span class="mono">presets_k2</span> are \u201cyes\u201d when that printer\u2019s presets suit the filament. Dates are YYYY-MM-DD.</p></div>';
     h += '<label class="lbl" for="csv-text">CSV</label>';
     h += '<textarea class="csv-box" id="csv-text" spellcheck="false"></textarea>';
     document.getElementById('csv-body').innerHTML = h;
@@ -3322,6 +3558,19 @@
     var rootFilt = document.getElementById('filters');
     while (node && node !== rootMain && node !== rootFilt) {
       if (node.getAttribute) {
+        if (node.getAttribute('data-weigh-save')) {
+          saveWeighFromCard(node.getAttribute('data-weigh-save'));
+          return;
+        }
+        if (node.getAttribute('data-weigh-cancel')) {
+          weighingId = null;
+          renderMain();
+          return;
+        }
+        if (node.getAttribute('data-weigh')) {
+          openWeigh(node.getAttribute('data-weigh'));
+          return;
+        }
         if (node.getAttribute('data-open')) {
           var it = findItem(node.getAttribute('data-open'));
           if (it) renderEdit(clone(it), false);
@@ -3359,7 +3608,8 @@
       spools_sealed: '', spools_opened: '', grams_remaining: '',
       spool_capacity_g: String(state.settings.defaultCapacity || 1000),
       location: '', date_opened: '', date_dried: '', notes: '',
-      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: ''
+      presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: '',
+      date_weighed: ''
     };
   }
   function bind() {
@@ -3502,6 +3752,10 @@
       normalizeHex: normalizeHex,
       seedList: seedList,
       CSV_HEADERS: CSV_HEADERS,
+      parseWeightInput: parseWeightInput,
+      applyWeightValue: applyWeightValue,
+      todayISO: todayISO,
+      weightPctLabel: weightPctLabel,
       COLOR_NAMES: COLOR_NAMES,
       getState: function () { return state; },
       saveItems: saveItems,
@@ -3518,6 +3772,7 @@
       applyParsedFields: applyParsedFields,
       applyScannedCode: applyScannedCode,
       handleScannedPayload: handleScannedPayload,
+      renderEdit: renderEdit,
       decodeFromCanvas: decodeFromCanvas,
       openScanPanel: openScanPanel,
       closeScanPanel: closeScanPanel,
