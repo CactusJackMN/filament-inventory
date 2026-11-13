@@ -3,7 +3,7 @@
 Stable header (do not rename columns; new columns may be added at the end in a future version):
 
 ```
-id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_sealed,spools_opened,grams_remaining,spool_capacity_g,location,date_opened,date_dried,notes,presets_k1c,presets_k2,low_stock_threshold,seeded,barcode,date_weighed
+id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_sealed,spools_opened,grams_remaining,spool_capacity_g,location,date_opened,date_dried,notes,presets_k1c,presets_k2,low_stock_threshold,seeded,barcode,date_weighed,date_added
 ```
 
 | Column | Meaning |
@@ -29,6 +29,7 @@ id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_se
 | low_stock_threshold | Per-row override (total spools). Blank uses the app default. |
 | seeded | `yes` for rows that came from print history. |
 | barcode | The raw text of a scanned or typed 1D/2D barcode (QR, Data Matrix, UPC, EAN, Code 128, …). Blank on older rows. |
-| date_weighed | `YYYY-MM-DD` when the current net weight was entered. Blank if the weight is unknown or was never weighed. Appended at the end so older CSVs still import. |
+| date_weighed | `YYYY-MM-DD` when the current net weight was entered. Blank if the weight is unknown or was never weighed. |
+| date_added | When the entry was created (`YYYY-MM-DDTHH:MM` local). Blank on older or seeded rows. Appended at the end so older CSVs still import. |
 
-The file is UTF-8, comma-separated, RFC 4180-style quoting, CRLF line endings. A leading UTF-8 BOM is accepted on import. Older files without the trailing `barcode` or `date_weighed` columns still import; missing values are treated as blank.
+The file is UTF-8, comma-separated, RFC 4180-style quoting, CRLF line endings. A leading UTF-8 BOM is accepted on import. Older files without the trailing `barcode`, `date_weighed`, or `date_added` columns still import; missing values are treated as blank.

@@ -834,20 +834,105 @@
       display: none;
       position: fixed;
       left: 50%;
-      bottom: calc(24px + var(--safe-b));
+      top: calc(12px + var(--safe-t));
       -webkit-transform: translateX(-50%);
       transform: translateX(-50%);
-      background: #1c1917;
+      background: #067647;
       color: #fff;
-      padding: 12px 18px;
+      padding: 14px 20px;
+      border-radius: 14px;
+      z-index: 90;
+      max-width: 92%;
+      font-weight: 700;
+      font-size: 17px;
+      line-height: 1.35;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    html.theme-dark .toast { background: #75e0a7; color: #0c1f1f; }
+    .toast.is-on { display: block; }
+    .toast.is-err { background: #b42318; color: #fff; }
+    html.theme-dark .toast.is-err { background: #f97066; color: #1c1917; }
+    .session-banner {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      color: var(--text);
       border-radius: 12px;
-      z-index: 80;
-      max-width: 90%;
-      font-weight: 600;
+      padding: 10px 12px;
+      margin: 0 0 12px;
+      font-weight: 700;
+    }
+    .session-item .sess-meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .session-item .sess-actions {
+      display: -webkit-flex;
+      display: flex;
+      gap: 6px;
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+    }
+    .results-bar {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      -webkit-align-items: baseline;
+      align-items: baseline;
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+    .results-bar strong { color: var(--text); }
+    .inv-totals {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
       box-shadow: var(--shadow);
     }
-    html.theme-dark .toast { background: #f3eee7; color: #1c1917; }
-    .toast.is-on { display: block; }
+    .inv-totals h2 { margin: 0 0 8px; font-size: 18px; }
+    .inv-totals .tot-line { font-size: 15px; margin: 0 0 4px; }
+    .inv-sort {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+      margin: 0 0 12px;
+    }
+    .inv-row {
+      display: -webkit-flex;
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 10px;
+      color: inherit;
+      box-shadow: var(--shadow);
+      -webkit-align-items: flex-start;
+      align-items: flex-start;
+    }
+    .inv-row .swatch { width: 56px; min-height: 56px; height: 56px; }
+    .inv-row .inv-body { -webkit-flex: 1; flex: 1; min-width: 0; }
+    .inv-row h3 { margin: 0 0 2px; font-size: 18px; font-weight: 700; }
+    .inv-row .inv-weight { font-weight: 700; font-size: 16px; margin-top: 4px; }
+    .inv-row.is-fresh {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .chip-inv { font-weight: 700; }
+    #btn-inventory.is-on, #btn-inventory.btn-primary { background: var(--accent); color: var(--accent-text); }
+    #panel-edit { z-index: 50; }
+    #panel-camera { z-index: 60; }
+    #panel-confirm { z-index: 70; }
     .csv-box {
       width: 100%;
       min-height: 180px;
@@ -945,6 +1030,7 @@
           <h1>Filament Inventory</h1>
         </div>
         <div class="top-actions">
+          <button type="button" class="btn" id="btn-inventory">Inventory</button>
           <button type="button" class="btn" id="btn-settings" title="Settings">Settings</button>
           <button type="button" class="btn" id="btn-scan">Scan</button>
           <button type="button" class="btn" id="btn-csv">CSV</button>
@@ -1073,7 +1159,7 @@
     'finish', 'diameter_mm', 'spools_sealed', 'spools_opened', 'grams_remaining',
     'spool_capacity_g', 'location', 'date_opened', 'date_dried', 'notes',
     'presets_k1c', 'presets_k2', 'low_stock_threshold', 'seeded', 'barcode',
-    'date_weighed'
+    'date_weighed', 'date_added'
   ];
 
   var MATERIALS = ['PLA', 'PLA+', 'PLA-Silk', 'PETG', 'TPU', 'ABS', 'ASA', 'PET-CF', 'Other'];
@@ -1159,7 +1245,8 @@
         low_stock_threshold: '',
         seeded: 'yes',
         barcode: '',
-        date_weighed: ''
+        date_weighed: '',
+        date_added: ''
       }, o);
     }
     return [
@@ -1481,6 +1568,77 @@
     function z(n) { return (n < 10 ? '0' : '') + n; }
     return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
   }
+  function nowStamp() {
+    var d = new Date();
+    function z(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + 'T' + z(d.getHours()) + ':' + z(d.getMinutes());
+  }
+  function formatDateTime(s) {
+    s = trim(s);
+    if (!s) return '';
+    return s.replace('T', ' ');
+  }
+  function compareAdded(a, b) {
+    var da = trim(a && a.date_added);
+    var db = trim(b && b.date_added);
+    if (da && db) return db < da ? -1 : (db > da ? 1 : 0);
+    if (da && !db) return -1;
+    if (!da && db) return 1;
+    return 0;
+  }
+  function itemSummary(it) {
+    var parts = [];
+    if (it.material) parts.push(it.material);
+    if (it.brand) parts.push(it.brand);
+    if (it.color_name || it.color_hex) parts.push(it.color_name || it.color_hex);
+    var g = parseNum(it.grams_remaining);
+    if (g != null) parts.push(formatGrams(g) + ' g');
+    return parts.join(' \u00b7 ');
+  }
+  function stampNewItem(it) {
+    if (it && !isYes(it.seeded) && !trim(it.date_added)) it.date_added = nowStamp();
+  }
+  var freshIds = [];
+  var freshTimer = null;
+  function highlightFresh(ids) {
+    freshIds = ids ? ids.slice() : [];
+    if (freshTimer) clearTimeout(freshTimer);
+    freshTimer = setTimeout(function () {
+      freshIds = [];
+      var nodes = document.querySelectorAll('.is-fresh');
+      var i, c;
+      for (i = 0; i < nodes.length; i++) {
+        c = nodes[i].className.replace(/\bis-fresh\b/g, '').replace(/\s+/g, ' ');
+        nodes[i].className = trim(c);
+      }
+    }, 4500);
+  }
+  function isFresh(id) {
+    return freshIds.indexOf(id) !== -1;
+  }
+  function syncSearchBox() {
+    var el = document.getElementById('search');
+    if (el && el.value !== (state.settings.search || '')) el.value = state.settings.search || '';
+  }
+  function syncInventoryButton() {
+    var btn = document.getElementById('btn-inventory');
+    if (!btn) return;
+    if (state.settings.view === 'inventory') btn.className = 'btn btn-primary is-on';
+    else btn.className = 'btn';
+  }
+  function showInventory(idsToHighlight) {
+    state.settings.view = 'inventory';
+    state.settings.filter = 'all';
+    state.settings.lowOnly = false;
+    state.settings.unknownOnly = false;
+    state.settings.search = '';
+    if (!state.settings.inventorySort) state.settings.inventorySort = 'added';
+    saveSettings();
+    if (idsToHighlight && idsToHighlight.length) highlightFresh(idsToHighlight);
+    renderAll();
+    var main = document.getElementById('main');
+    if (main) main.scrollTop = 0;
+  }
   function formatGrams(g) {
     if (g == null) return '';
     var r = Math.round(g * 10) / 10;
@@ -1565,7 +1723,7 @@
     if (!it || !input) return;
     var r = applyWeightValue(it, input.value);
     if (!r.ok) {
-      toast(r.error);
+      toast(r.error, 'err');
       input.focus();
       return;
     }
@@ -1586,7 +1744,8 @@
       filter: 'all',
       search: '',
       lowOnly: false,
-      unknownOnly: false
+      unknownOnly: false,
+      inventorySort: 'added'
     }
   };
 
@@ -1596,6 +1755,7 @@
       it = state.items[i];
       if (it && it.barcode == null) it.barcode = '';
       if (it && it.date_weighed == null) it.date_weighed = '';
+      if (it && it.date_added == null) it.date_added = '';
     }
   }
   function loadSettings() {
@@ -1609,7 +1769,7 @@
   }
   function saveSettings() {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); }
-    catch (e) { toast('Could not save settings (storage full?)'); }
+    catch (e) { toast('Could not save settings (storage full?)', 'err'); }
   }
   function loadItems() {
     try {
@@ -1636,7 +1796,7 @@
       localStorage.setItem(STORAGE_KEY, payload);
       localStorage.setItem(STORAGE_KEY + '-backup', payload);
     } catch (e) {
-      toast('Could not save inventory (storage full?). Export a CSV now.');
+      toast('Could not save inventory (storage full?). Export a CSV now.', 'err');
     }
   }
   function applyTheme() {
@@ -2121,7 +2281,8 @@
   function isBlankNewItem(it) {
     if (!it || isYes(it.seeded)) return false;
     return !it.color_name && !it.color_hex && !it.notes && !trim(it.barcode) &&
-      it.spools_sealed === '' && it.spools_opened === '' && !it.product_line && !trim(it.location);
+      it.spools_sealed === '' && it.spools_opened === '' && !it.product_line && !trim(it.location) &&
+      !trim(it.grams_remaining) && !trim(it.date_weighed) && !trim(it.date_added);
   }
 
   function discardBlankNewIfNeeded(exceptId) {
@@ -2197,12 +2358,12 @@
   }
 
   var toastTimer = null;
-  function toast(msg) {
+  function toast(msg, kind) {
     var el = document.getElementById('toast');
     el.textContent = msg;
-    el.className = 'toast is-on';
+    el.className = 'toast is-on' + (kind === 'err' ? ' is-err' : '');
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.className = 'toast'; }, 2800);
+    toastTimer = setTimeout(function () { el.className = 'toast'; }, 5000);
   }
   function materialOptions(selected) {
     var html = '', i, m, seen = {};
@@ -2294,24 +2455,163 @@
     html += '<div class="view-sort">';
     html += '<button type="button" class="chip' + (s.view === 'list' ? ' is-on' : '') + '" data-view="list">List</button>';
     html += '<button type="button" class="chip' + (s.view === 'grid' ? ' is-on' : '') + '" data-view="grid">Grid</button>';
-    html += '<label class="sr-only" for="sort">Sort</label>';
-    html += '<select class="sel" id="sort">';
-    html += '<option value="material"' + (s.sort === 'material' ? ' selected' : '') + '>Sort: material</option>';
-    html += '<option value="name"' + (s.sort === 'name' ? ' selected' : '') + '>Sort: name</option>';
-    html += '<option value="color"' + (s.sort === 'color' ? ' selected' : '') + '>Sort: color</option>';
-    html += '<option value="hand"' + (s.sort === 'hand' ? ' selected' : '') + '>Sort: most on hand</option>';
-    html += '</select></div>';
+    html += '<button type="button" class="chip chip-inv' + (s.view === 'inventory' ? ' is-on' : '') + '" data-view="inventory">Inventory</button>';
+    if (s.view !== 'inventory') {
+      html += '<label class="sr-only" for="sort">Sort</label>';
+      html += '<select class="sel" id="sort">';
+      html += '<option value="material"' + (s.sort === 'material' ? ' selected' : '') + '>Sort: material</option>';
+      html += '<option value="name"' + (s.sort === 'name' ? ' selected' : '') + '>Sort: name</option>';
+      html += '<option value="color"' + (s.sort === 'color' ? ' selected' : '') + '>Sort: color</option>';
+      html += '<option value="hand"' + (s.sort === 'hand' ? ' selected' : '') + '>Sort: most on hand</option>';
+      html += '</select>';
+    }
+    html += '</div>';
     document.getElementById('filters').innerHTML = html;
   }
+  function inventoryItems() {
+    var s = state.settings;
+    var q = trim(s.search).toLowerCase();
+    var out = [], i, it, blob;
+    for (i = 0; i < state.items.length; i++) {
+      it = state.items[i];
+      if (s.filter && s.filter !== 'all' && it.material !== s.filter) continue;
+      if (q) {
+        blob = [
+          it.material, it.brand, it.product_line, it.color_name, it.color_hex,
+          it.finish, it.location, it.notes, it.presets_k1c, it.presets_k2, it.barcode
+        ].join(' ').toLowerCase();
+        if (blob.indexOf(q) === -1) continue;
+      }
+      out.push(it);
+    }
+    var sort = s.inventorySort || 'added';
+    out.sort(function (a, b) {
+      if (sort === 'material') {
+        var ia = MATERIALS.indexOf(a.material), ib = MATERIALS.indexOf(b.material);
+        if (ia < 0) ia = 1000;
+        if (ib < 0) ib = 1000;
+        if (ia !== ib) return ia - ib;
+        return trim(a.color_name || a.color_hex).localeCompare(trim(b.color_name || b.color_hex));
+      }
+      if (sort === 'color') return trim(a.color_name || a.color_hex).localeCompare(trim(b.color_name || b.color_hex));
+      if (sort === 'weight') {
+        var ga = parseNum(a.grams_remaining), gb = parseNum(b.grams_remaining);
+        if (ga == null && gb == null) return compareAdded(a, b);
+        if (ga == null) return 1;
+        if (gb == null) return -1;
+        if (gb !== ga) return gb - ga;
+        return compareAdded(a, b);
+      }
+      var c = compareAdded(a, b);
+      if (c) return c;
+      return trim(a.color_name || a.material).localeCompare(trim(b.color_name || b.material));
+    });
+    return out;
+  }
+  function inventoryTotalsHTML(items) {
+    var by = {}, i, it, g, mat, keys = [], html, totalG = 0, known = 0;
+    for (i = 0; i < items.length; i++) {
+      it = items[i];
+      mat = it.material || 'Other';
+      if (!by[mat]) { by[mat] = {count: 0, grams: 0}; keys.push(mat); }
+      by[mat].count += 1;
+      g = parseNum(it.grams_remaining);
+      if (g != null) { by[mat].grams += g; totalG += g; known += 1; }
+    }
+    keys.sort(function (a, b) {
+      var ia = MATERIALS.indexOf(a), ib = MATERIALS.indexOf(b);
+      if (ia < 0) ia = 1000;
+      if (ib < 0) ib = 1000;
+      return ia - ib;
+    });
+    html = '<div class="inv-totals">';
+    html += '<h2>Inventory</h2>';
+    html += '<p class="tot-line"><strong>' + items.length + '</strong> spool' + (items.length === 1 ? '' : 's');
+    html += ' \u00b7 <strong>' + esc(formatGrams(totalG) || '0') + ' g</strong> known weight';
+    if (known && known < items.length) html += ' on ' + known + ' of ' + items.length;
+    html += '</p>';
+    for (i = 0; i < keys.length; i++) {
+      mat = keys[i];
+      html += '<p class="tot-line">' + esc(mat) + ': <strong>' + by[mat].count + '</strong>';
+      html += ' \u00b7 ' + esc(formatGrams(by[mat].grams) || '0') + ' g</p>';
+    }
+    html += '</div>';
+    return html;
+  }
+  function renderInventory() {
+    var items = inventoryItems();
+    var s = state.settings;
+    var sort = s.inventorySort || 'added';
+    var html = inventoryTotalsHTML(items);
+    html += '<div class="inv-sort">';
+    html += '<span class="lbl" style="margin:0">Sort</span>';
+    html += '<button type="button" class="chip' + (sort === 'added' ? ' is-on' : '') + '" data-invsort="added">Recently added</button>';
+    html += '<button type="button" class="chip' + (sort === 'material' ? ' is-on' : '') + '" data-invsort="material">Material</button>';
+    html += '<button type="button" class="chip' + (sort === 'color' ? ' is-on' : '') + '" data-invsort="color">Color</button>';
+    html += '<button type="button" class="chip' + (sort === 'weight' ? ' is-on' : '') + '" data-invsort="weight">Weight</button>';
+    html += '</div>';
+    if (!items.length) {
+      html += '<div class="empty"><h2>No spools match</h2><p>Try clearing the search or material filter, or add a spool.</p></div>';
+      return html;
+    }
+    var i, it, w, title, bits;
+    for (i = 0; i < items.length; i++) {
+      it = items[i];
+      title = it.color_name || it.color_hex || '(no color)';
+      w = weightPctLabel(it);
+      html += '<button type="button" class="inv-row' + (isFresh(it.id) ? ' is-fresh' : '') + '" data-open="' + esc(it.id) + '">';
+      html += swatchHTML(it.color_hex);
+      html += '<div class="inv-body"><h3>' + esc(title);
+      if (isFresh(it.id)) html += ' <span class="badge badge-low" style="background:var(--accent-soft);color:var(--accent)">New</span>';
+      html += '</h3>';
+      html += '<div class="meta"><strong>' + esc(it.material || '') + '</strong>';
+      if (it.brand) html += ' \u00b7 ' + esc(it.brand);
+      if (it.product_line) html += ' \u00b7 ' + esc(it.product_line);
+      html += '</div>';
+      html += '<div class="inv-weight">' + (w ? esc(w) : '<span class="qty-unknown">weight unknown</span>') + '</div>';
+      bits = [];
+      if (it.date_weighed) bits.push('weighed ' + it.date_weighed);
+      if (it.spools_sealed !== '' && it.spools_sealed != null) bits.push(it.spools_sealed + ' sealed');
+      if (it.spools_opened !== '' && it.spools_opened != null) bits.push(it.spools_opened + ' opened');
+      if (it.barcode) bits.push('barcode ' + it.barcode);
+      if (it.location) bits.push(it.location);
+      if (it.date_added) bits.push('added ' + formatDateTime(it.date_added));
+      if (bits.length) html += '<div class="meta">' + esc(bits.join(' \u00b7 ')) + '</div>';
+      html += '</div></button>';
+    }
+    return html;
+  }
+  function resultsBarHTML(shown) {
+    var total = state.items.length;
+    var s = state.settings;
+    var bits = [];
+    if (s.filter && s.filter !== 'all') bits.push(s.filter);
+    if (s.lowOnly) bits.push('low stock');
+    if (s.unknownOnly) bits.push('unknown qty');
+    if (trim(s.search)) bits.push('search “' + s.search + '”');
+    var html = '<div class="results-bar">';
+    html += '<span><strong>' + shown + '</strong> shown';
+    if (shown !== total) html += ' of <strong>' + total + '</strong>';
+    if (bits.length) html += ' \u00b7 ' + esc(bits.join(' \u00b7 '));
+    html += '</span></div>';
+    return html;
+  }
   function renderMain() {
-    var items = filteredItems();
     var s = state.settings;
     var main = document.getElementById('main');
-    if (!items.length) {
-      main.innerHTML = '<div class="empty"><h2>No filaments match</h2><p>Try clearing the search or filters, or add a spool.</p></div>';
+    var items, html;
+    if (s.view === 'inventory') {
+      items = inventoryItems();
+      main.innerHTML = resultsBarHTML(items.length) + renderInventory();
       return;
     }
-    var html = '', i, it, group, lastGroup = null, low, title;
+    items = filteredItems();
+    if (!items.length) {
+      main.innerHTML = resultsBarHTML(0) + '<div class="empty"><h2>No filaments match</h2><p>Try clearing the search or filters, or add a spool. Open <strong>Inventory</strong> to see every spool.</p></div>';
+      return;
+    }
+    html = resultsBarHTML(items.length);
+    var i, it, group, lastGroup = null, low, title;
     if (s.view === 'grid') {
       html += '<div class="grid">';
       for (i = 0; i < items.length; i++) {
@@ -2380,6 +2680,8 @@
   }
   function renderAll() {
     applyTheme();
+    syncSearchBox();
+    syncInventoryButton();
     renderFilters();
     renderMain();
   }
@@ -2449,8 +2751,10 @@
     return '<div class="field"><label for="f-' + name + '">' + esc(label) + '</label>' +
       '<input id="f-' + name + '" name="' + name + '" type="text" value="' + esc(value == null ? '' : value) + '" ' + attrs + '></div>';
   }
+  var editingIsNew = false;
   function renderEdit(item, isNew, opts) {
     editingId = item.id;
+    editingIsNew = !!isNew;
     document.getElementById('edit-title').textContent = isNew ? 'Add filament' : (item.color_name || item.material || 'Filament');
     document.getElementById('btn-delete-edit').style.display = isNew ? 'none' : '';
     var h = '<div class="form-grid">';
@@ -2579,7 +2883,7 @@
     var gramsEl = document.getElementById('f-grams_remaining');
     var parsed = parseWeightInput(gramsEl ? gramsEl.value : '');
     if (!parsed.ok) {
-      toast(parsed.error);
+      toast(parsed.error, 'err');
       if (gramsEl) gramsEl.focus();
       return;
     }
@@ -2593,10 +2897,14 @@
     } else {
       it.date_weighed = todayISO();
     }
+    var isNewAdd = editingIsNew || (!isYes(it.seeded) && !trim(it.date_added));
+    stampNewItem(it);
+    editingIsNew = false;
     saveItems();
     closePanel('panel-edit');
-    renderAll();
-    toast('Saved');
+    if (isNewAdd) showInventory([it.id]);
+    else renderAll();
+    toast('Saved: ' + itemSummary(it));
   }
 
   function startCamera(cb) {
@@ -2764,7 +3072,7 @@
     };
     img.onerror = function () {
       URL.revokeObjectURL(url);
-      toast('Could not read that photo');
+      toast('Could not read that photo', 'err');
     };
     img.src = url;
   }
@@ -3200,6 +3508,7 @@
     it.diameter_mm = rapidSticky.diameter_mm || it.diameter_mm;
     it.finish = rapidSticky.finish || it.finish;
     applyParsedFields(it, parsed, true);
+    stampNewItem(it);
     state.items.unshift(it);
     renderEdit(it, true);
     var bits = [];
@@ -3240,7 +3549,8 @@
     }
     h += '</div></div></div>';
     h += '<div style="margin:16px 0"><button type="button" class="btn btn-primary btn-lg" id="r-save">Save &amp; next</button></div>';
-    h += '<div class="session-list"><h3>This session (' + rapidSession.length + ')</h3><div id="r-session"></div></div>';
+    h += '<div class="session-banner" id="r-session-banner"></div>';
+    h += '<div class="session-list"><h3 id="r-session-heading">This session</h3><div id="r-session"></div></div>';
     document.getElementById('rapid-body').innerHTML = h;
     renderRapidSession();
     openPanel('panel-rapid');
@@ -3302,11 +3612,12 @@
       spool_capacity_g: cap,
       location: '', date_opened: '', date_dried: '', notes: '',
       presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: '',
-      date_weighed: ''
+      date_weighed: '',
+      date_added: nowStamp()
     };
     var parsedW = parseWeightInput(weight);
     if (!parsedW.ok) {
-      toast(parsedW.error);
+      toast(parsedW.error, 'err');
       document.getElementById('r-weight').focus();
       return;
     }
@@ -3331,37 +3642,58 @@
     document.getElementById('r-name').value = '';
     document.getElementById('r-picker').value = '#FFFFFF';
     document.getElementById('r-weight').value = '';
+    highlightFresh([item.id]);
     renderRapidSession();
     renderAll();
-    toast('Saved ' + (name || item.material) + (w != null ? ' \u00b7 ' + w + ' g' : '') + '. Ready for the next spool.');
+    toast('Saved: ' + itemSummary(item));
     document.getElementById('r-camera').focus();
+  }
+  function sessionCountLabel(n) {
+    if (n === 1) return '1 spool added this session';
+    return n + ' spools added this session';
   }
   function renderRapidSession() {
     var el = document.getElementById('r-session');
     if (!el) return;
-    var h3 = el.parentNode && el.parentNode.querySelector('h3');
-    if (!rapidSession.length) {
-      el.innerHTML = '<p class="hint">Nothing added yet this session.</p>';
+    var h3 = document.getElementById('r-session-heading') || (el.parentNode && el.parentNode.querySelector('h3'));
+    var banner = document.getElementById('r-session-banner');
+    var n = rapidSession.length;
+    if (banner) banner.textContent = sessionCountLabel(n);
+    var title = document.getElementById('rapid-title');
+    if (title) title.textContent = n ? ('Add spools \u00b7 ' + n + ' added') : 'Add spools';
+    if (!n) {
+      el.innerHTML = '<p class="hint">Nothing added yet this session. After you tap Save &amp; next, each spool will appear here so you can confirm it was added.</p>';
       if (h3) h3.textContent = 'This session (0)';
       return;
     }
-    var html = '', i, it;
+    var html = '', i, it, w;
     for (i = rapidSession.length - 1; i >= 0; i--) {
       it = findItem(rapidSession[i].id);
       if (!it) continue;
+      w = weightPctLabel(it);
       html += '<div class="session-item">';
       html += '<div class="mini" style="background:' + esc(normalizeHex(it.color_hex) || 'transparent') + '"></div>';
-      html += '<div style="flex:1"><strong>' + esc(it.color_name || it.color_hex || it.material) + '</strong> \u00b7 ' +
-        esc(it.material) + (it.brand ? ' \u00b7 ' + esc(it.brand) : '') +
-        ' \u00b7 ' + esc(qtyLabel(it)) + '</div>';
-      html += '<button type="button" class="btn" data-undo="' + esc(it.id) + '">Undo</button></div>';
+      html += '<div style="flex:1"><strong>' + esc(it.color_name || it.color_hex || '(no color)') + '</strong>';
+      html += '<div class="sess-meta">' + esc(it.material || '') + (it.brand ? ' \u00b7 ' + esc(it.brand) : '');
+      html += (w ? ' \u00b7 ' + esc(w) : '') + (it.date_added ? ' \u00b7 ' + esc(formatDateTime(it.date_added)) : '') + '</div></div>';
+      html += '<div class="sess-actions">';
+      html += '<button type="button" class="btn" data-session-edit="' + esc(it.id) + '">Edit</button>';
+      html += '<button type="button" class="btn" data-undo="' + esc(it.id) + '">Undo</button>';
+      html += '</div></div>';
     }
     el.innerHTML = html;
-    if (h3) h3.textContent = 'This session (' + rapidSession.length + ')';
+    if (h3) h3.textContent = 'This session (' + n + ')';
     var undos = el.querySelectorAll('[data-undo]');
     for (i = 0; i < undos.length; i++) {
       undos[i].addEventListener('click', function () {
         undoRapid(this.getAttribute('data-undo'));
+      });
+    }
+    var edits = el.querySelectorAll('[data-session-edit]');
+    for (i = 0; i < edits.length; i++) {
+      edits[i].addEventListener('click', function () {
+        var item = findItem(this.getAttribute('data-session-edit'));
+        if (item) renderEdit(item, false);
       });
     }
   }
@@ -3388,7 +3720,7 @@
     h += '<button type="button" class="btn" id="csv-import">Import CSV</button></div>';
     h += '<div class="help-block"><h3>CSV header (stable)</h3>';
     h += '<p class="mono">' + esc(CSV_HEADERS.join(',')) + '</p>';
-    h += '<p>Blank <span class="mono">spools_sealed</span>, <span class="mono">spools_opened</span>, and <span class="mono">grams_remaining</span> mean unknown, not zero. <span class="mono">grams_remaining</span> is the net filament weight after taring an empty spool. <span class="mono">date_weighed</span> is when that weight was entered (YYYY-MM-DD). <span class="mono">presets_k1c</span> and <span class="mono">presets_k2</span> are \u201cyes\u201d when that printer\u2019s presets suit the filament. Dates are YYYY-MM-DD.</p></div>';
+    h += '<p>Blank <span class="mono">spools_sealed</span>, <span class="mono">spools_opened</span>, and <span class="mono">grams_remaining</span> mean unknown, not zero. <span class="mono">grams_remaining</span> is the net filament weight after taring an empty spool. <span class="mono">date_weighed</span> is when that weight was entered (YYYY-MM-DD). <span class="mono">date_added</span> is when the entry was created (YYYY-MM-DDTHH:MM, local). <span class="mono">presets_k1c</span> and <span class="mono">presets_k2</span> are \u201cyes\u201d when that printer\u2019s presets suit the filament.</p></div>';
     h += '<label class="lbl" for="csv-text">CSV</label>';
     h += '<textarea class="csv-box" id="csv-text" spellcheck="false"></textarea>';
     document.getElementById('csv-body').innerHTML = h;
@@ -3473,7 +3805,7 @@
   }
   function importCsvText(text) {
     var incoming = itemsFromCSV(text);
-    if (!incoming.length) { toast('No rows found in that CSV'); return; }
+    if (!incoming.length) { toast('No rows found in that CSV', 'err'); return; }
     var byId = {}, i;
     for (i = 0; i < state.items.length; i++) byId[state.items[i].id] = i;
     var added = 0, updated = 0;
@@ -3558,6 +3890,12 @@
     var rootFilt = document.getElementById('filters');
     while (node && node !== rootMain && node !== rootFilt) {
       if (node.getAttribute) {
+        if (node.getAttribute('data-invsort')) {
+          state.settings.inventorySort = node.getAttribute('data-invsort');
+          saveSettings();
+          renderAll();
+          return;
+        }
         if (node.getAttribute('data-weigh-save')) {
           saveWeighFromCard(node.getAttribute('data-weigh-save'));
           return;
@@ -3609,7 +3947,7 @@
       spool_capacity_g: String(state.settings.defaultCapacity || 1000),
       location: '', date_opened: '', date_dried: '', notes: '',
       presets_k1c: '', presets_k2: '', low_stock_threshold: '', seeded: '', barcode: '',
-      date_weighed: ''
+      date_weighed: '', date_added: ''
     };
   }
   function bind() {
@@ -3632,6 +3970,9 @@
         saveSettings();
         renderMain();
       }, 120);
+    });
+    document.getElementById('btn-inventory').addEventListener('click', function () {
+      showInventory(freshIds);
     });
     document.getElementById('btn-scan').addEventListener('click', function () { openScanPanel('list'); });
     document.getElementById('btn-scan-cancel').addEventListener('click', function () { closeScanPanel(); });
@@ -3697,6 +4038,12 @@
           }
         }
         closePanel(id);
+        if (id === 'panel-rapid' && rapidSession.length) {
+          var ids = [], ri;
+          for (ri = 0; ri < rapidSession.length; ri++) ids.push(rapidSession[ri].id);
+          showInventory(ids);
+          toast(sessionCountLabel(ids.length) + ' \u2014 shown in Inventory');
+        }
       }
     });
     document.addEventListener('keydown', function (e) {
@@ -3755,6 +4102,10 @@
       parseWeightInput: parseWeightInput,
       applyWeightValue: applyWeightValue,
       todayISO: todayISO,
+      nowStamp: nowStamp,
+      itemSummary: itemSummary,
+      showInventory: showInventory,
+      inventoryItems: inventoryItems,
       weightPctLabel: weightPctLabel,
       COLOR_NAMES: COLOR_NAMES,
       getState: function () { return state; },

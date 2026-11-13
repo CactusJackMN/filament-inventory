@@ -16,9 +16,11 @@ The first visit must be over HTTPS (GitHub Pages provides that). After it is on 
 
 ## Daily use
 
-- **List** and **Grid** views, filters by material, search, and **Sort: most on hand** (for “color doesn’t matter, use what I have plenty of”).
+- **List**, **Grid**, and **Inventory** views. **Inventory** lists every spool (color, material, brand, weight and percent, date weighed, sealed/opened counts, barcode, location), with totals at the top. It sorts by recently added first by default, or by material, color, or weight, and filters by material.
+- A green banner confirms every save, for example `Saved: PETG · Generic · White · 642 g`. After you add a spool, Inventory opens with that row highlighted.
+- **List** and **Grid** still support filters by material, search, and **Sort: most on hand** (for “color doesn’t matter, use what I have plenty of”).
 - On each card: **+ / −** sealed spools, **Used a spool**, **Weigh**, **Edit**. Tap **Weigh** and type the current net grams from the scale (tare an empty spool first), then Enter or **Save**. Cards show that weight as a share of the spool capacity, for example `642 g (64%)`.
-- **+ Add** for a single filament. **Add spools** is rapid entry: pick a material (it stays), then for each spool take a photo, tap the filament, type the exact current grams (or use the 250 / 500 / 750 / 1000 shortcuts), **Save & next**. Undo is on the session list.
+- **+ Add** for a single filament. **Add spools** is rapid entry: pick a material (it stays), then for each spool take a photo, tap the filament, type the exact current grams (or use the 250 / 500 / 750 / 1000 shortcuts), **Save & next**. A running “N spools added this session” count and a session list (swatch, material, brand, color, weight, time, Undo / Edit) stay visible below the form.
 - **Scan** (on the main list, and on Add / Edit next to the barcode field): opens the rear camera and continuously reads 1D and 2D codes (QR, Data Matrix, Aztec, PDF417, UPC, EAN, Code 128, Code 39, and similar). A short beep plays when a code is read (and vibration, if the iPad supports it). If the code already belongs to a spool, that entry opens with the current-weight field focused so you can type the scale reading. Otherwise a new entry is started with the barcode filled in, using the last material / brand from rapid entry, and any brand, material, color, or hex the code itself contains. If the camera is denied, type the code or use a photo.
 - **Camera** (on Add, Edit, and Add spools): take or pick a photo, tap or drag a reticle, and the app averages a 15×15 pixel patch while dropping the brightest 10% (glare). An optional **white balance** step lets you tap a white or gray card first. Photos are downscaled to 1,200 px before sampling so older iPads stay stable. The hex is always editable; a nearby color name is suggested.
 - **Low stock** uses a configurable threshold (Settings). Entries with unknown counts are not treated as zero and are not flagged low.
@@ -31,7 +33,7 @@ Counts live only on the iPad. iPadOS may clear Home Screen app storage if the ap
 ### Stable CSV header
 
 ```
-id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_sealed,spools_opened,grams_remaining,spool_capacity_g,location,date_opened,date_dried,notes,presets_k1c,presets_k2,low_stock_threshold,seeded,barcode,date_weighed
+id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_sealed,spools_opened,grams_remaining,spool_capacity_g,location,date_opened,date_dried,notes,presets_k1c,presets_k2,low_stock_threshold,seeded,barcode,date_weighed,date_added
 ```
 
 - `spools_sealed`, `spools_opened`, and `grams_remaining`: **blank means unknown, not zero**.
@@ -42,7 +44,8 @@ id,material,brand,product_line,color_name,color_hex,finish,diameter_mm,spools_se
 - Dates are `YYYY-MM-DD`.
 - `seeded` is `yes` for entries that came from print history.
 - `barcode` is the raw text of a scanned or typed code. It was appended so older CSVs without this column still import.
-- `date_weighed` is the `YYYY-MM-DD` when the current net weight was entered. It is appended at the end so older CSVs without this column still import.
+- `date_weighed` is the `YYYY-MM-DD` when the current net weight was entered.
+- `date_added` is when the entry was created (`YYYY-MM-DDTHH:MM` local). It is appended at the end so older CSVs without this column still import. Blank on older or seeded rows.
 - Import matches rows by `id` (updates existing, adds new).
 
 ## Seed list

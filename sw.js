@@ -1,5 +1,5 @@
 /* Filament Inventory service worker — simple cache for iPadOS 15 Safari */
-var CACHE = 'filament-inventory-v4';
+var CACHE = 'filament-inventory-v5';
 var ASSETS = [
   './',
   './index.html',
